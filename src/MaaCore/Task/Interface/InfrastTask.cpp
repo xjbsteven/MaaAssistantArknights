@@ -10,12 +10,79 @@
 #include "Task/Infrast/InfrastOfficeTask.h"
 #include "Task/Infrast/InfrastPowerTask.h"
 #include "Task/Infrast/InfrastProcessingTask.h"
+#include "Task/Infrast/InfrastPresetTask.h"
+#include "Task/Infrast/InfrastProductionTask.h"
 #include "Task/Infrast/InfrastReceptionTask.h"
 #include "Task/Infrast/InfrastTradeTask.h"
 #include "Task/Infrast/InfrastTrainingTask.h"
 #include "Task/Infrast/ReplenishOriginiumShardTaskPlugin.h"
 #include "Task/Miscellaneous/ScreenshotTaskPlugin.h"
 #include "Task/ProcessTask.h"
+
+namespace
+{
+std::shared_ptr<asst::InfrastProductionTask> make_facility_preset_drones_task(
+    const asst::AsstCallback& callback,
+    asst::Assistant* inst,
+    std::string_view task_chain,
+    const json::object& drones_json,
+    bool& valid)
+{
+    valid = true;
+
+    if (!drones_json.get("enable", true)) {
+        return nullptr;
+    }
+
+    std::string room = drones_json.get("room", std::string());
+    if (room.empty()) {
+        Log.warn("facility_preset drones room is unsetted or empty");
+        return nullptr;
+    }
+
+    std::shared_ptr<asst::InfrastProductionTask> drones_task_ptr = nullptr;
+    if (room == "trading") {
+        drones_task_ptr = std::make_shared<asst::InfrastTradeTask>(callback, inst, task_chain);
+    }
+    else if (room == "manufacture") {
+        drones_task_ptr = std::make_shared<asst::InfrastMfgTask>(callback, inst, task_chain);
+    }
+    else {
+        Log.error("error facility_preset drones config, unknown room", room);
+        valid = false;
+        return nullptr;
+    }
+
+    const int index = drones_json.get("index", 1);
+    if (index < 1 || index > 5) {
+        Log.error("error facility_preset drones config, index out of range", index);
+        valid = false;
+        return nullptr;
+    }
+
+    asst::infrast::CustomDronesConfig drones_config;
+    drones_config.index = index - 1;
+    drones_config.order = asst::infrast::CustomDronesConfig::Order::Pre;
+
+    drones_task_ptr->set_custom_config(
+        asst::infrast::CustomFacilityConfig(drones_config.index + 1, asst::infrast::CustomRoomConfig { .skip = true }));
+    drones_task_ptr->set_custom_drones_config(std::move(drones_config));
+    drones_task_ptr->set_ignore_error(true);
+    return drones_task_ptr;
+}
+
+std::shared_ptr<asst::InfrastMfgTask> make_facility_preset_replenish_task(
+    const asst::AsstCallback& callback,
+    asst::Assistant* inst,
+    std::string_view task_chain)
+{
+    auto replenish_task_ptr = std::make_shared<asst::InfrastMfgTask>(callback, inst, task_chain);
+    replenish_task_ptr->set_ignore_error(true);
+    replenish_task_ptr->set_skip_shift(true);
+    replenish_task_ptr->register_plugin<asst::ReplenishOriginiumShardTaskPlugin>()->set_enable(true);
+    return replenish_task_ptr;
+}
+} // namespace
 
 asst::InfrastTask::InfrastTask(const AsstCallback& callback, Assistant* inst) :
     InterfaceTask(callback, inst, TaskType),
@@ -30,7 +97,8 @@ asst::InfrastTask::InfrastTask(const AsstCallback& callback, Assistant* inst) :
     m_office_task_ptr(std::make_shared<InfrastOfficeTask>(callback, inst, TaskType)),
     m_processing_task_ptr(std::make_shared<InfrastProcessingTask>(callback, inst, TaskType)),
     m_training_task_ptr(std::make_shared<InfrastTrainingTask>(callback, inst, TaskType)),
-    m_dorm_task_ptr(std::make_shared<InfrastDormTask>(callback, inst, TaskType))
+    m_dorm_task_ptr(std::make_shared<InfrastDormTask>(callback, inst, TaskType)),
+    m_preset_task_ptr(std::make_shared<InfrastPresetTask>(callback, inst, TaskType))
 {
     LogTraceFunction;
 
@@ -165,6 +233,7 @@ bool asst::InfrastTask::set_params(const json::value& params)
 
     bool dorm_trust_enabled = params.get("dorm_trust_enabled", false);
     m_dorm_task_ptr->set_trust_enabled(dorm_trust_enabled);
+    m_facility_preset_dorm_enabled = dorm_notstationed_enabled || dorm_trust_enabled;
 
     bool reception_message_board = params.get("reception_message_board", true);
     m_reception_task_ptr->set_receive_message_board(reception_message_board);
@@ -177,6 +246,7 @@ bool asst::InfrastTask::set_params(const json::value& params)
 
     bool replenish = params.get("replenish", false);
     m_replenish_task_ptr->set_enable(replenish);
+    m_facility_preset_replenish_enabled = replenish;
 
     if (mode == Mode::Custom && !m_running) {
         auto filename_opt = params.find<std::string>("filename");
@@ -226,6 +296,77 @@ bool asst::InfrastTask::parse_and_set_custom_config(const std::filesystem::path&
         return false;
     }
     auto& cur_plan = all_plans.at(index);
+
+    std::string strategy = cur_plan.get("strategy", std::string());
+    if (strategy == "facility_preset") {
+        auto preset_opt = cur_plan.find<json::object>("preset");
+        if (!preset_opt) {
+            Log.error("facility_preset strategy requires preset object");
+            return false;
+        }
+
+        const auto& preset = preset_opt.value();
+        auto rooms_opt = preset.find<json::array>("rooms");
+        if (!rooms_opt) {
+            Log.error("facility_preset preset.rooms is unsetted");
+            return false;
+        }
+
+        std::vector<std::string> rooms;
+        for (const auto& room : rooms_opt.value()) {
+            if (!room.is_string()) {
+                Log.error("facility_preset room should be string");
+                return false;
+            }
+            rooms.emplace_back(room.as_string());
+        }
+
+        const bool rest = preset.get("rest", true);
+
+        std::shared_ptr<InfrastProductionTask> drones_task_ptr = nullptr;
+        std::string drones_order = "pre";
+
+        if (auto drones_opt = cur_plan.find<json::object>("drones")) {
+            const auto& drones = drones_opt.value();
+
+            bool valid = true;
+            drones_task_ptr = make_facility_preset_drones_task(m_callback, m_inst, TaskType, drones, valid);
+            if (!valid) {
+                return false;
+            }
+            drones_order = drones.get("order", "pre");
+        }
+
+        const bool drones_after_preset = drones_task_ptr && drones_order == "post";
+        m_preset_task_ptr->set_rooms(std::move(rooms)).set_rest(rest);
+
+        m_subtasks.clear();
+        m_subtasks.emplace_back(m_infrast_begin_task_ptr);
+        if (drones_task_ptr && !drones_after_preset) {
+            m_subtasks.emplace_back(drones_task_ptr);
+            m_subtasks.emplace_back(m_infrast_begin_task_ptr);
+        }
+        m_subtasks.emplace_back(m_preset_task_ptr);
+        if (drones_after_preset) {
+            m_subtasks.emplace_back(m_infrast_begin_task_ptr);
+            m_subtasks.emplace_back(drones_task_ptr);
+        }
+
+        if (m_facility_preset_replenish_enabled) {
+            m_subtasks.emplace_back(m_infrast_begin_task_ptr);
+            m_subtasks.emplace_back(make_facility_preset_replenish_task(m_callback, m_inst, TaskType));
+        }
+
+        if (m_facility_preset_dorm_enabled) {
+            m_subtasks.emplace_back(m_infrast_begin_task_ptr);
+            m_subtasks.emplace_back(m_dorm_task_ptr);
+        }
+        return true;
+    }
+    else if (!strategy.empty() && strategy != "operators") {
+        Log.error("Unknown custom infrast strategy", strategy);
+        return false;
+    }
 
     // 录入干员编组
     std::unordered_map<std::string, std::vector<std::string>> ori_operator_groups;
