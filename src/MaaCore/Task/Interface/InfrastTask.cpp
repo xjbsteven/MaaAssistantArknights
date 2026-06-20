@@ -36,7 +36,7 @@ std::shared_ptr<asst::InfrastProductionTask> make_facility_preset_drones_task(
 
     std::string room = drones_json.get("room", std::string());
     if (room.empty()) {
-        Log.warn("facility_preset drones room is unsetted or empty");
+        Log.warn("facility_preset drones room is unset or empty");
         return nullptr;
     }
 
@@ -308,7 +308,7 @@ bool asst::InfrastTask::parse_and_set_custom_config(const std::filesystem::path&
         const auto& preset = preset_opt.value();
         auto rooms_opt = preset.find<json::array>("rooms");
         if (!rooms_opt) {
-            Log.error("facility_preset preset.rooms is unsetted");
+            Log.error("facility_preset preset.rooms is unset");
             return false;
         }
 

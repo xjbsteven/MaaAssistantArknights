@@ -183,4 +183,4 @@ icon: material-symbols:view-quilt-rounded
 
 [153 极限效率，一天三换](https://github.com/MaaAssistantArknights/MaaAssistantArknights/blob/master-v2/resource/custom_infrast/153_layout_3_times_a_day.json)
 
-[设施预设换班，一天三换示例](resource/custom_infrast/facility_preset_3_shifts_daily.json)
+[设施预设换班，一天三换示例](../../resource/custom_infrast/facility_preset_3_shifts_daily.json)
