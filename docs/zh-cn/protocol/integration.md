@@ -341,17 +341,28 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 <br>
 `10000` - `Custom`: 自定义换班模式，读取用户配置，可参考 [基建排班协议](./base-scheduling-schema.md)。
 <br>
-自定义配置中的单个计划可通过 `strategy: "facility_preset"` 启用设施预设换班，MAA 会在游戏内「进驻总览」页点击指定设施右侧的预设切换按钮，并可通过 `drones.order` 配置换班前或换班后的无人机使用。该模式兼容宿舍信赖、未进驻筛选和源石碎片自动补货设置。
+自定义配置中的单个计划仍可通过 `strategy: "facility_preset"` 启用设施预设换班（兼容旧配置）。
 <br>
-`20000` - `Rotation`: 一键轮换模式，会跳过控制中枢、发电站、宿舍以及办公室，其余设施不进行换班但保留基本操作（如使用无人机、会客室逻辑）。  
+`20000` - `Rotation`: 队列轮换模式。默认 `rotation_style = "game"` 时，在游戏内执行一键队列轮换，并跳过控制中枢、发电站、宿舍以及办公室的换班，其余设施保留基本操作。
+<br>
+当 `rotation_style = "station_preset"` 时，改为在「进驻总览」按 JSON `preset.rooms` 点击预设切换按钮；需提供 `filename` 与 `plan_index`。该子模式兼容宿舍信赖、未进驻筛选、源石碎片自动补货、会客室三项设置及训练室继续专精；会客室收线索默认执行。
+:::  
+::: field name="rotation_style" type="string" optional default="game"  
+队列轮换子类型。`mode = 20000` 时有效。
+<br>
+`game` - 游戏内一键队列轮换。
+<br>
+`station_preset` - 进驻总览设施点预设，读取 `filename` 中的 `preset` 配置。  
 :::  
 ::: field name="facility" type="array<string>" required  
 要换班的设施（有序）。不支持运行中设置。
 <br>
+`rotation_style = "station_preset"` 时该字段仅用于满足参数格式，不参与子任务编排。
+<br>
 设施名：`Mfg` | `Trade` | `Power` | `Control` | `Reception` | `Office` | `Dorm` | `Processing` | `Training`  
 :::  
 ::: field name="drones" type="string" optional default="\_NotUse"  
-无人机用途。`mode = 10000` 时该字段无效。
+无人机用途。`mode = 10000` 或 `rotation_style = "station_preset"` 时该字段无效；`station_preset` 使用 JSON plan 中的 `drones`。
 <br>
 选项：`_NotUse` | `Money` | `SyntheticJade` | `CombatRecord` | `PureGold` | `OriginStone` | `Chip`  
 :::  
@@ -360,10 +371,10 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 <br>
 `mode = 10000` 时该字段仅针对 "autofill" 有效。
 <br>
-`mode = 20000` 时该字段无效。  
+`mode = 20000` 或 `rotation_style = "station_preset"` 时该字段无效。  
 :::  
 ::: field name="replenish" type="boolean" optional default="false"  
-贸易站“源石碎片”是否自动补货。  
+制造站“源石碎片”是否自动补货。`rotation_style = "station_preset"` 时有效。  
 :::  
 ::: field name="dorm_notstationed_enabled" type="boolean" optional default="false"  
 是否启用宿舍“未进驻”选项。  
@@ -380,15 +391,18 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 ::: field name="reception_send_clue" type="boolean" optional default="true"  
 是否赠送线索。  
 :::  
+::: field name="continue_training" type="boolean" optional default="false"  
+训练完成后是否继续尝试专精当前技能。`rotation_style = "station_preset"` 时有效。  
+:::  
 ::: field name="filename" type="string" required  
 自定义配置路径。不支持运行中设置。
 <br>
-<Badge type="warning" text="仅在 mode = 10000 时生效" />  
+<Badge type="warning" text="mode = 10000 或 rotation_style = station_preset 时生效" />  
 :::  
 ::: field name="plan_index" type="number" required  
 使用配置中的方案序号。不支持运行中设置。
 <br>
-<Badge type="warning" text="仅在 mode = 10000 时生效" />  
+<Badge type="warning" text="mode = 10000 或 rotation_style = station_preset 时生效" />  
 :::  
 ::::
 
