@@ -20,6 +20,11 @@ bool asst::InfrastReceptionPresetTask::_run()
         }
     }
 
+    if (!wait_for_reception_main_page()) {
+        Log.warn("reception page not ready after entering facility");
+        return false;
+    }
+
     if (m_receive_message_board) {
         receive_message_board();
     }
@@ -148,6 +153,8 @@ bool asst::InfrastReceptionPresetTask::exchange_clues_once()
         return true;
     }
 
+    sleep(1000);
+
     if (!quick_insert_clues()) {
         fill_clue_vacancies_fallback();
     }
@@ -170,7 +177,7 @@ bool asst::InfrastReceptionPresetTask::quick_insert_clues()
     const int vacancy_cnt = static_cast<int>(vacancy_analyzer.get_vacancy().size());
 
     const auto confirm_task = Task.get("InfrastClueQuickInsertConfirm");
-    if (vacancy_cnt <= 0 || confirm_task == nullptr) {
+    if (confirm_task == nullptr) {
         return true;
     }
 
@@ -179,9 +186,11 @@ bool asst::InfrastReceptionPresetTask::quick_insert_clues()
 
     if (auto ocr_res = ocr_analyzer.analyze()) {
         int available = 0;
-        if (utils::chars_to_number(ocr_res->text, available) && available == vacancy_cnt) {
+        if (utils::chars_to_number(ocr_res->text, available) && available > 0) {
+            Log.info("vacancy_cnt:", vacancy_cnt, ", available:", available);
             Rect click_rect = confirm_task->roi.move(confirm_task->rect_move);
             ctrler()->click(click_rect);
+            sleep(confirm_task->post_delay);
         }
     }
 

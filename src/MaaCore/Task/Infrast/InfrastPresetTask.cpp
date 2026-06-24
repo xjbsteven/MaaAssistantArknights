@@ -31,10 +31,16 @@ constexpr int SwitchButtonClickOffsetX = 3;
 constexpr int SwitchButtonMinHeight = 28;
 // 列表里设施名 OCR 在卡片顶部，切换按钮在整行垂直居中，需按整行高度估算按钮 Y。
 constexpr int FacilityRowHeight = 88;
+// 模板匹配成功时，设施名 rect 顶边到切换按钮顶边的实测偏移（1280x720）。
+constexpr int SwitchButtonTopOffsetY = 27;
+constexpr int SwitchButtonWidth = 42;
+constexpr int SwitchButtonHeight = 46;
+constexpr int SwitchButtonLeftX = 1188;
+constexpr double SwitchButtonGeometryVerifyThreshold = 0.65;
 
 int switch_button_expected_y(const Rect& room_text_rect)
 {
-    return room_text_rect.y + FacilityRowHeight / 2;
+    return room_text_rect.y + SwitchButtonTopOffsetY + SwitchButtonHeight / 2;
 }
 
 std::pair<int, int> switch_button_search_y_range(const Rect& room_text_rect)
@@ -49,6 +55,18 @@ std::pair<int, int> switch_button_search_y_range(const Rect& room_text_rect)
 bool is_room_row_blocked_by_bottom(const Rect& room_text_rect)
 {
     return room_text_rect.y + FacilityRowHeight > BottomBlockedY - 20;
+}
+
+std::optional<Rect> geometry_switch_button_rect(const Rect& room_text_rect)
+{
+    if (is_room_row_blocked_by_bottom(room_text_rect)) {
+        return std::nullopt;
+    }
+    return Rect(
+        SwitchButtonLeftX,
+        room_text_rect.y + SwitchButtonTopOffsetY,
+        SwitchButtonWidth,
+        SwitchButtonHeight);
 }
 
 constexpr int MaxMfgIndex = 5;
@@ -464,8 +482,9 @@ bool asst::InfrastPresetTask::_run()
     if (rooms.empty() && !m_rooms.empty()) {
         return false;
     }
-    else if (rooms.empty()) {
-        Log.warn("facility preset rooms is empty");
+    if (rooms.empty()) {
+        Log.warn("facility preset rooms is empty, skip preset page");
+        return true;
     }
 
     if (!ProcessTask(*this, { "InfrastEnterPresetPage" }).run()) {
@@ -473,7 +492,7 @@ bool asst::InfrastPresetTask::_run()
     }
     sleep(500);
 
-    if (!rooms.empty() && !click_preset_buttons(std::move(rooms))) {
+    if (!click_preset_buttons(std::move(rooms))) {
         return false;
     }
 
@@ -481,7 +500,17 @@ bool asst::InfrastPresetTask::_run()
         return false;
     }
 
+    exit_preset_page();
+
     return true;
+}
+
+void asst::InfrastPresetTask::exit_preset_page() const
+{
+    ProcessTask task(*this, { "InfrastRotationReturn" });
+    task.set_retry_times(3);
+    task.set_ignore_error(true);
+    task.run();
 }
 
 std::vector<asst::InfrastPresetTask::RoomInfo> asst::InfrastPresetTask::normalized_rooms() const
@@ -626,11 +655,20 @@ std::unordered_map<std::string, Rect>
         rows.emplace_back(row);
     }
 
+    // 固定设施同屏常有两行 OCR：区块标题 + 实际预设行。取 Y 更大的一行，避免点到上一区块的按钮。
+    std::unordered_map<std::string, Rect> fixed_room_rects;
     for (const auto& row : rows) {
-        if (row.cls.kind == RoomRowKind::Fixed && target_ids.contains(row.cls.id) && !result.contains(row.cls.id)) {
-            result.emplace(row.cls.id, row.rect);
-            Log.trace("facility preset room visible:", row.cls.id, row.rect.to_string());
+        if (row.cls.kind != RoomRowKind::Fixed || !target_ids.contains(row.cls.id)) {
+            continue;
         }
+        const auto iter = fixed_room_rects.find(row.cls.id);
+        if (iter == fixed_room_rects.end() || row.rect.y > iter->second.y) {
+            fixed_room_rects[row.cls.id] = row.rect;
+        }
+    }
+    for (const auto& [id, rect] : fixed_room_rects) {
+        result.emplace(id, rect);
+        Log.trace("facility preset room visible:", id, rect.to_string());
     }
 
     for (const auto& type : numbered_types()) {
@@ -671,21 +709,61 @@ std::optional<Rect> asst::InfrastPresetTask::find_enabled_switch_button(const cv
         return button;
     };
 
-    asst::MultiMatcher matcher(image);
-    matcher.set_task_info("InfrastPresetSwitchButton");
-    matcher.set_roi(search_roi);
-    if (auto match_result = matcher.analyze(); match_result && !match_result->empty()) {
-        const auto& matches = matcher.get_result();
+    auto match_switch_in_roi = [&](const Rect& roi) -> std::optional<Rect> {
+        asst::MultiMatcher roi_matcher(image);
+        roi_matcher.set_task_info("InfrastPresetSwitchButton");
+        roi_matcher.set_roi(roi);
+        if (!roi_matcher.analyze() || roi_matcher.get_result().empty()) {
+            return std::nullopt;
+        }
+        const auto& matches = roi_matcher.get_result();
         auto best_iter = std::ranges::min_element(matches, [&](const asst::MatchRect& lhs, const asst::MatchRect& rhs) {
             const int lhs_center = lhs.rect.y + lhs.rect.height / 2;
             const int rhs_center = rhs.rect.y + rhs.rect.height / 2;
             return std::abs(lhs_center - expected_y) < std::abs(rhs_center - expected_y);
         });
-        if (best_iter != matches.cend() && best_iter->score >= SwitchButtonMatchThreshold) {
-            if (auto button = accept_button(best_iter->rect)) {
-                Log.trace("facility preset switch matched:", best_iter->to_string(), button->to_string());
-                return button;
+        if (best_iter == matches.cend() || best_iter->score < SwitchButtonMatchThreshold) {
+            if (best_iter != matches.cend()) {
+                Log.trace(
+                    "facility preset switch template below threshold:",
+                    best_iter->score,
+                    best_iter->rect.to_string());
             }
+            return std::nullopt;
+        }
+        return accept_button(best_iter->rect);
+    };
+
+    if (auto button = match_switch_in_roi(search_roi)) {
+        Log.trace("facility preset switch matched:", button->to_string());
+        return button;
+    }
+
+    if (auto geometry_button = geometry_switch_button_rect(room_text_rect)) {
+        const Rect verify_roi(
+            geometry_button->x - 8,
+            geometry_button->y - 8,
+            geometry_button->width + 16,
+            geometry_button->height + 16);
+        asst::MultiMatcher verify_matcher(image);
+        verify_matcher.set_task_info("InfrastPresetSwitchButton");
+        verify_matcher.set_roi(verify_roi);
+        if (verify_matcher.analyze() && !verify_matcher.get_result().empty()) {
+            const auto& matches = verify_matcher.get_result();
+            const auto best_iter = std::ranges::max_element(matches, {}, &asst::MatchRect::score);
+            if (best_iter != matches.cend() && best_iter->score >= SwitchButtonGeometryVerifyThreshold) {
+                if (auto button = accept_button(best_iter->rect)) {
+                    Log.trace(
+                        "facility preset switch geometry verified:",
+                        best_iter->score,
+                        button->to_string());
+                    return button;
+                }
+            }
+        }
+        if (auto button = accept_button(*geometry_button)) {
+            Log.trace("facility preset switch geometry fallback:", button->to_string());
+            return button;
         }
     }
 

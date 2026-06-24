@@ -2684,7 +2684,7 @@
     "InfrastReceptionReceiveMessageBoard": {
         "algorithm": "JustReturn",
         "maxTimes": 3,
-        "next": ["InfrastReceptionInteractive#next", "InfrastReceptionReceiveMessageBoard"]
+        "next": ["InfrastReceptionInteractive#next"]
     },
     "InfrastReceptionReceiveMessageBoard-Exit": {
         "action": "DoNothing",
