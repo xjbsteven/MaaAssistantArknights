@@ -1,5 +1,7 @@
 #include "Matcher.h"
 
+#include <format>
+
 #include "MaaUtils/NoWarningCV.hpp"
 
 #include "Config/TaskData.h"
@@ -79,6 +81,15 @@ Matcher::ResultOpt Matcher::analyze() const
         }
         else {
             Log.debug("match_templ |", templ_name, tag, "score:", max_val, "rect:", rect, "roi:", m_roi);
+        }
+        // TODO(temp): remove after ReceptionFlag recognition issue is resolved
+        if (templ_name.find("ReceptionFlag") != std::string::npos) {
+            const bool passed = max_val >= threshold;
+            utils::save_debug_image(
+                m_image,
+                utils::path("debug") / utils::path("infrast") / utils::path("reception_flag"),
+                true,
+                std::format("ReceptionFlag {} score={:.4f}", passed ? "ok" : "fail", max_val));
         }
         if (max_val < threshold) {
             continue;
