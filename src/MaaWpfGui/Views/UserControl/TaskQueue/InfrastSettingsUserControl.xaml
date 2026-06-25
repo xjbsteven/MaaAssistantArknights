@@ -66,6 +66,12 @@
                         ItemsSource="{Binding CustomPlanListDisplay}"
                         SelectedValue="{Binding CustomInfrastPlanSelect}"
                         SelectedValuePath="Value" />
+                    <CheckBox
+                        Margin="0,4"
+                        Content="{DynamicResource CustomInfrastPlanIndexAutoSwitch}"
+                        IsChecked="{Binding CustomInfrastAutoAdvancePlanIndex}"
+                        Visibility="{c:Binding 'CustomInfrastPlanSelect != -1',
+                                               Source={x:Static taskQueue_vms:InfrastSettingsUserControlModel.Instance}}" />
                 </StackPanel>
                 <controls:TextBlock
                     Margin="0,5"
@@ -127,12 +133,16 @@
                     HorizontalAlignment="Center"
                     Orientation="Horizontal">
                     <controls:TextBlock
-                        MaxWidth="150"
-                        Text="{DynamicResource DormThreshold}"
-                        TextWrapping="Wrap" />
-                    <controls:TextBlock Text=": " />
-                    <controls:TextBlock d:Text="30" Text="{Binding DormThreshold}" />
-                    <controls:TextBlock Text="%" />
+                        MaxWidth="180"
+                        d:Text="{DynamicResource DormThreshold}"
+                        TextWrapping="Wrap">
+                        <controls:TextBlock.Text>
+                            <MultiBinding StringFormat="{}{0}: {1}%">
+                                <Binding Source="{StaticResource DormThreshold}" />
+                                <Binding Path="DormThreshold" />
+                            </MultiBinding>
+                        </controls:TextBlock.Text>
+                    </controls:TextBlock>
                     <controls:TooltipBlock TooltipText="{DynamicResource InfrastThresholdTip}" />
                 </StackPanel>
                 <Slider

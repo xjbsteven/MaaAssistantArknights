@@ -45,7 +45,6 @@ public class InfrastSettingsUserControlModel : TaskSettingsViewModel, InfrastSet
     static InfrastSettingsUserControlModel()
     {
         Instance = new();
-        LocalizationHelper.LanguageChanged += Instance.RefreshLocalization;
     }
 
     public InfrastSettingsUserControlModel()
@@ -106,25 +105,29 @@ public class InfrastSettingsUserControlModel : TaskSettingsViewModel, InfrastSet
     /// <summary>
     /// Gets the list of uses of drones.
     /// </summary>
-    public LocalizedObservableList<string> UsesOfDronesList { get; } = new(
-        ("_NotUse", "DronesNotUse"),
-        ("Money", "Money"),
-        ("SyntheticJade", "SyntheticJade"),
-        ("CombatRecord", "CombatRecord"),
-        ("PureGold", "PureGold"),
-        ("OriginStone", "OriginStone"),
-        ("Chip", "Chip"));
+    public List<CombinedData> UsesOfDronesList { get; } =
+        [
+            new() { Display = LocalizationHelper.GetString("DronesNotUse"), Value = "_NotUse" },
+            new() { Display = LocalizationHelper.GetString("Money"), Value = "Money" },
+            new() { Display = LocalizationHelper.GetString("SyntheticJade"), Value = "SyntheticJade" },
+            new() { Display = LocalizationHelper.GetString("CombatRecord"), Value = "CombatRecord" },
+            new() { Display = LocalizationHelper.GetString("PureGold"), Value = "PureGold" },
+            new() { Display = LocalizationHelper.GetString("OriginStone"), Value = "OriginStone" },
+            new() { Display = LocalizationHelper.GetString("Chip"), Value = "Chip" },
+        ];
 
     /// <summary>
     /// Gets the list of uses of default infrast.
     /// </summary>
-    public LocalizedObservableList<string> DefaultInfrastList { get; } = new(
-        (UserDefined, "UserDefined"),
-        ("153_layout_3_times_a_day.json", "153Time3"),
-        ("153_layout_4_times_a_day.json", "153Time4"),
-        ("243_layout_3_times_a_day.json", "243Time3"),
-        ("243_layout_4_times_a_day.json", "243Time4"),
-        ("333_layout_for_Orundum_3_times_a_day.json", "333Time3"));
+    public List<CombinedData> DefaultInfrastList { get; } =
+        [
+            new() { Display = LocalizationHelper.GetString("UserDefined"), Value = UserDefined },
+            new() { Display = LocalizationHelper.GetString("153Time3"), Value = "153_layout_3_times_a_day.json" },
+            new() { Display = LocalizationHelper.GetString("153Time4"), Value = "153_layout_4_times_a_day.json" },
+            new() { Display = LocalizationHelper.GetString("243Time3"), Value = "243_layout_3_times_a_day.json" },
+            new() { Display = LocalizationHelper.GetString("243Time4"), Value = "243_layout_4_times_a_day.json" },
+            new() { Display = LocalizationHelper.GetString("333Time3"), Value = "333_layout_for_Orundum_3_times_a_day.json" },
+        ];
 
     /// <summary>
     /// Gets or sets the threshold to enter dormitory.
@@ -175,10 +178,12 @@ public class InfrastSettingsUserControlModel : TaskSettingsViewModel, InfrastSet
     /// <summary>
     /// Gets the list of uses of infrast mode.
     /// </summary>
-    public LocalizedObservableList<Mode> InfrastModeList { get; } = new(
-        (Mode.Normal, "InfrastModeNormal"),
-        (Mode.Rotation, "InfrastModeRotation"),
-        (Mode.Custom, "InfrastModeCustom"));
+    public List<GenericCombinedData<Mode>> InfrastModeList { get; } =
+    [
+        new() { Display = LocalizationHelper.GetString("InfrastModeNormal"), Value = Mode.Normal },
+        new() { Display = LocalizationHelper.GetString("InfrastModeRotation"), Value = Mode.Rotation },
+        new() { Display = LocalizationHelper.GetString("InfrastModeCustom"), Value = Mode.Custom },
+    ];
 
     /// <summary>
     /// Gets or sets the infrast mode.
@@ -346,6 +351,12 @@ public class InfrastSettingsUserControlModel : TaskSettingsViewModel, InfrastSet
         }
     }
 
+    public bool CustomInfrastAutoAdvancePlanIndex
+    {
+        get => GetTaskConfig<InfrastTask>().AutoAdvancePlanIndex;
+        set => SetTaskConfig<InfrastTask>(t => t.AutoAdvancePlanIndex == value, t => t.AutoAdvancePlanIndex = value);
+    }
+
     private readonly GenericCombinedData<int> _defaultItem = new() { Display = LocalizationHelper.GetStringFormat("CustomInfrastTimeSchedule", string.Empty), Value = -1 };
 
     public List<CustomInfrastConfig.Plan> CustomInfrastPlanList
@@ -486,7 +497,7 @@ public class InfrastSettingsUserControlModel : TaskSettingsViewModel, InfrastSet
     /// <param name="infrast">基建任务</param>
     public static void IncreaseCustomInfrastPlanIndex(InfrastTask? infrast)
     {
-        if (infrast is null || infrast.Mode != Mode.Custom || infrast.PlanSelect == -1 || infrast.PlanSelect >= infrast.InfrastPlan.Count)
+        if (infrast is null || !infrast.AutoAdvancePlanIndex || infrast.Mode != Mode.Custom || infrast.PlanSelect == -1 || infrast.PlanSelect >= infrast.InfrastPlan.Count)
         {
             return;
         }
@@ -545,16 +556,6 @@ public class InfrastSettingsUserControlModel : TaskSettingsViewModel, InfrastSet
     }
 
     public override (bool? IsSuccess, IEnumerable<int> TaskId) SerializeTask(BaseTask? baseTask, int? taskId = null) => (this as ISerialize).Serialize(baseTask, taskId);
-
-    /// <summary>
-    /// 刷新构造时缓存的本地化列表文本。
-    /// </summary>
-    private void RefreshLocalization()
-    {
-        UsesOfDronesList.RefreshLocalization();
-        DefaultInfrastList.RefreshLocalization();
-        InfrastModeList.RefreshLocalization();
-    }
 
     private interface ISerialize : ITaskQueueModelSerialize
     {
