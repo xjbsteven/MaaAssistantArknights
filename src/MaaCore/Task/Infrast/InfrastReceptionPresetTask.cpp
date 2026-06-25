@@ -64,12 +64,16 @@ bool asst::InfrastReceptionPresetTask::_run()
 
 bool asst::InfrastReceptionPresetTask::on_run_fails()
 {
-    if (asst::InfrastAbstractTask::on_run_fails()) {
-        return true;
-    }
+    LogTraceFunction;
 
-    ProcessTask(*this, { "CloseSendClue", "Stop" }).run();
-    return asst::InfrastAbstractTask::on_run_fails();
+    ProcessTask(*this, { "CloseSendClue" }).set_ignore_error(true).run();
+
+    ProcessTask recover(*this, { "Infrast@ReturnButton" });
+    recover.set_retry_times(3);
+    recover.set_ignore_error(true);
+    recover.run();
+
+    return true;
 }
 
 asst::InfrastReceptionPresetTask&

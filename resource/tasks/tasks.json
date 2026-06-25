@@ -2422,9 +2422,12 @@
         "next": ["Stop"]
     },
     "InfrastPresetSwitchButton": {
-        "template": "InfrastPresetSwitchButton.png",
+        "template": [
+            "InfrastPresetSwitchButton.png",
+            "InfrastPresetSwitchButtonBlue.png"
+        ],
         "roi": [1160, 60, 70, 640],
-        "templThreshold": 0.75,
+        "templThreshold": [0.75, 0.7],
         "maskRange": [1, 255]
     },
     "InfrastRotationClick": {
@@ -3260,7 +3263,8 @@
         "next": ["CloseSendClue"]
     },
     "ReceptionFlag": {
-        "roi": [350, 0, 200, 100]
+        "roi": [350, 0, 200, 100],
+        "templThreshold": 0.75
     },
     "EndOfClueExchangeBegin": {
         "algorithm": "JustReturn",

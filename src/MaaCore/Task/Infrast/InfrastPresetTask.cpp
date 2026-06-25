@@ -25,7 +25,6 @@ const Rect WorkAreaRoomTextRoi = { 400, 55, 150, 650 };
 const Rect SwitchButtonSearchRoi = { 1160, 60, 70, 640 };
 constexpr int MaxScrollTimes = 16;
 constexpr int BottomBlockedY = 610;
-constexpr double SwitchButtonMatchThreshold = 0.75;
 constexpr int SwitchButtonMaxYDrift = 70;
 constexpr int SwitchButtonClickOffsetX = 3;
 constexpr int SwitchButtonMinHeight = 28;
@@ -500,7 +499,9 @@ bool asst::InfrastPresetTask::_run()
         return false;
     }
 
-    exit_preset_page();
+    if (!m_rest) {
+        exit_preset_page();
+    }
 
     return true;
 }
@@ -561,18 +562,25 @@ bool asst::InfrastPresetTask::click_preset_buttons(std::vector<RoomInfo> rooms)
             continue;
         }
 
-        const auto visible_rooms = analyze_visible_rooms(image, rooms);
         bool clicked = false;
         bool blocked_by_bottom = false;
 
         for (auto iter = rooms.begin(); iter != rooms.end();) {
-            const auto visible_iter = visible_rooms.find(iter->id);
-            if (visible_iter == visible_rooms.cend()) {
+            const cv::Mat room_image = ctrler()->get_image();
+            if (room_image.empty()) {
+                Log.warn("facility preset empty screenshot before click:", iter->id);
                 ++iter;
                 continue;
             }
 
-            auto button = find_enabled_switch_button(image, visible_iter->second);
+            const auto current_visible = analyze_visible_rooms(room_image, rooms);
+            const auto visible_iter = current_visible.find(iter->id);
+            if (visible_iter == current_visible.cend()) {
+                ++iter;
+                continue;
+            }
+
+            auto button = find_enabled_switch_button(room_image, visible_iter->second);
             if (!button) {
                 if (is_room_row_blocked_by_bottom(visible_iter->second)) {
                     blocked_by_bottom = true;
@@ -722,20 +730,17 @@ std::optional<Rect> asst::InfrastPresetTask::find_enabled_switch_button(const cv
             const int rhs_center = rhs.rect.y + rhs.rect.height / 2;
             return std::abs(lhs_center - expected_y) < std::abs(rhs_center - expected_y);
         });
-        if (best_iter == matches.cend() || best_iter->score < SwitchButtonMatchThreshold) {
-            if (best_iter != matches.cend()) {
-                Log.trace(
-                    "facility preset switch template below threshold:",
-                    best_iter->score,
-                    best_iter->rect.to_string());
-            }
+        if (best_iter == matches.cend()) {
             return std::nullopt;
         }
-        return accept_button(best_iter->rect);
+        if (auto button = accept_button(best_iter->rect)) {
+            Log.trace("facility preset switch matched:", best_iter->to_string());
+            return button;
+        }
+        return std::nullopt;
     };
 
     if (auto button = match_switch_in_roi(search_roi)) {
-        Log.trace("facility preset switch matched:", button->to_string());
         return button;
     }
 

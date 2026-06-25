@@ -388,7 +388,6 @@ void asst::InfrastTask::append_station_preset_auxiliary_subtasks()
     m_reception_preset_task_ptr->set_receive_message_board(m_reception_message_board)
         .set_enable_clue_exchange(m_reception_clue_exchange)
         .set_send_clue(m_reception_send_clue);
-    m_subtasks.emplace_back(m_infrast_begin_task_ptr);
     m_subtasks.emplace_back(m_reception_preset_task_ptr);
 
     if (m_facility_preset_training_enabled) {
