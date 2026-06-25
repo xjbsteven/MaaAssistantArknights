@@ -227,13 +227,6 @@ bool asst::InfrastAbstractTask::enter_facility(int index)
     return true;
 }
 
-bool asst::InfrastAbstractTask::wait_for_reception_main_page()
-{
-    ProcessTask task(*this, { "ReceptionFlag" });
-    task.set_retry_times(RetryTimesDefault);
-    return task.run();
-}
-
 bool asst::InfrastAbstractTask::enter_oper_list_page()
 {
     LogTraceFunction;

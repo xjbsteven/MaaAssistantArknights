@@ -32,7 +32,6 @@ protected:
     virtual bool on_run_fails() override;
 
     bool enter_facility(int index = 0);
-    bool wait_for_reception_main_page();
     // 从刚点进设施的界面，到干员列表页
     bool enter_oper_list_page();
 

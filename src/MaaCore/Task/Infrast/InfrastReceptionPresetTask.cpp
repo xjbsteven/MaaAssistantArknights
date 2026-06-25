@@ -20,11 +20,6 @@ bool asst::InfrastReceptionPresetTask::_run()
         }
     }
 
-    if (!wait_for_reception_main_page()) {
-        Log.warn("reception page not ready after entering facility");
-        return false;
-    }
-
     if (m_receive_message_board) {
         receive_message_board();
     }

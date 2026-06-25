@@ -3263,8 +3263,7 @@
         "next": ["CloseSendClue"]
     },
     "ReceptionFlag": {
-        "roi": [350, 0, 200, 100],
-        "templThreshold": 0.75
+        "roi": [350, 0, 200, 100]
     },
     "EndOfClueExchangeBegin": {
         "algorithm": "JustReturn",
