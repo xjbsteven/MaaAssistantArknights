@@ -145,7 +145,7 @@
         "specialParams": [500, 0, 3, 0]
     },
     "RelaunchAnchor@RA@RA1-DeployGatheringBaseSwipe": {
-        "doc": "步骤 10：JustReturn Swipe，占位部署采集基站",
+        "doc": "步骤 10：由 RelaunchAnchorDeployTaskPlugin 识别采集基站并部署（specificRect 为识别失败时的回退坐标）",
         "algorithm": "JustReturn",
         "action": "Swipe",
         "specificRect": [530, 630, 10, 10],
@@ -189,7 +189,7 @@
         "next": ["RelaunchAnchor@RA@RA1-DeployOperatorSwipe"]
     },
     "RelaunchAnchor@RA@RA1-DeployOperatorSwipe": {
-        "doc": "步骤 14：JustReturn Swipe，占位部署干员",
+        "doc": "步骤 14：由 RelaunchAnchorDeployTaskPlugin 识别最右干员并部署（specificRect 为识别失败时的回退坐标）",
         "algorithm": "JustReturn",
         "action": "Swipe",
         "specificRect": [1120, 630, 10, 10],
@@ -635,10 +635,10 @@
     },
     "RelaunchAnchor@RA@RA4-DeployGatheringBaseSwipe": {
         "baseTask": "RelaunchAnchor@RA@RA1-DeployGatheringBaseSwipe",
-        "doc": "步骤 11：JustReturn Swipe，占位部署采集基站",
-        "specificRect": [430, 630, 1, 1],
+        "doc": "步骤 11：由 RelaunchAnchorDeployTaskPlugin 识别采集基站并部署（specificRect 为识别失败时的回退坐标）",
+        "specificRect": [45, 635, 10, 10],
         "rectMove": [750, 340, 1, 1],
-        "next": ["RelaunchAnchor@RA@RA4-WaitDoubleSpeed"]
+        "next": ["RelaunchAnchor@RA@RA4-DeployGatheringBasePrompt", "RelaunchAnchor@RA@RA4-WaitDoubleSpeed"]
     },
     "RelaunchAnchor@RA@RA4-WaitDoubleSpeed": {
         "doc": "步骤 12 前等待二倍速提示出现",
@@ -864,9 +864,8 @@
         "rectMove": [790, 50, 1, 1]
     },
     "RelaunchAnchor@RA@RA4-DeployOperatorSwipe": {
-        "doc": "步骤 33：JustReturn Swipe，占位部署干员",
+        "doc": "步骤 33：由 RelaunchAnchorDeployTaskPlugin 识别最右干员并部署（specificRect 为识别失败时的回退坐标）",
         "baseTask": "RelaunchAnchor@RA@RA1-DeployOperatorSwipe",
-        "specificRect": [1120, 630, 1, 1],
         "rectMove": [745, 400, 1, 1],
         "next": ["RelaunchAnchor@RA@RA4-DeployOperatorDirection"]
     },
@@ -1338,7 +1337,7 @@
         "postDelay": 1000
     },
     "RelaunchAnchor@RA@RA15-DeployGatheringBaseSwipe": {
-        "doc": "步骤 18：JustReturn 的 Swipe，占位部署采集基站",
+        "doc": "步骤 18：由 RelaunchAnchorDeployTaskPlugin 识别采集基站并部署（specificRect 为识别失败时的回退坐标）",
         "algorithm": "JustReturn",
         "action": "Swipe",
         "specificRect": [400, 650, 1, 1],
@@ -1375,7 +1374,7 @@
         "next": ["RelaunchAnchor@RA@RA15-DeployCX"]
     },
     "RelaunchAnchor@RA@RA15-DeployCX": {
-        "doc": "步骤 22：JustReturn 的 Swipe，部署初雪",
+        "doc": "步骤 22：由 RelaunchAnchorDeployTaskPlugin 识别最右干员并部署初雪（specificRect 为识别失败时的回退坐标）",
         "algorithm": "JustReturn",
         "action": "Swipe",
         "specificRect": [1139, 638, 1, 1],

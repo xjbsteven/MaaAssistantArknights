@@ -9,6 +9,7 @@
 
 // TalesMode::ProsperityInSave 专用配置及插件
 #include "Task/Reclamation/ReclamationCraftTaskPlugin.h"
+#include "Task/Reclamation/RelaunchAnchorDeployTaskPlugin.h"
 
 #include "Utils/Logger.hpp"
 
@@ -21,6 +22,7 @@ asst::ReclamationTask::ReclamationTask(const AsstCallback& callback, Assistant* 
 
     // TalesMode::ProsperityInSave 专用参数
     m_reclamation_task_ptr->register_plugin<ReclamationCraftTaskPlugin>(m_config_ptr);
+    m_reclamation_task_ptr->register_plugin<RelaunchAnchorDeployTaskPlugin>(m_config_ptr);
 
     m_subtasks.emplace_back(m_reclamation_task_ptr);
 }
