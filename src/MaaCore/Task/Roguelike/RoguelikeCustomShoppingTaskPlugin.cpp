@@ -29,14 +29,7 @@ bool asst::RoguelikeCustomShoppingTaskPlugin::load_params(const json::value& par
         return false;
     }
 
-    if (auto opt = params.find<json::array>("refresh_trader_shopping_list"); opt) {
-        for (const auto& name : *opt) {
-            if (std::string name_str = name.as_string(); !name_str.empty()) {
-                m_shopping_list.emplace_back(std::move(name_str));
-            }
-        }
-    }
-
+    m_shopping_list = RoguelikeConfig::parse_refresh_trader_shopping_list(params);
     if (m_shopping_list.empty()) {
         return false;
     }

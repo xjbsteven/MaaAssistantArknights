@@ -4,6 +4,7 @@
 
 #include "Config/TaskData.h"
 #include "Utils/Logger.hpp"
+#include "Utils/StringMisc.hpp"
 
 bool asst::RoguelikeConfig::verify_and_load_params(const json::value& params)
 {
@@ -100,11 +101,7 @@ bool asst::RoguelikeConfig::verify_and_load_params(const json::value& params)
     }
 
     if (m_mode == RoguelikeMode::CollectibleFarm) {
-        bool has_list = false;
-        if (auto opt = params.find<json::array>("refresh_trader_shopping_list"); opt) {
-            has_list = std::ranges::any_of(*opt, [](const json::value& name) { return !name.as_string().empty(); });
-        }
-        if (!has_list) {
+        if (parse_refresh_trader_shopping_list(params).empty()) {
             Log.error(__FUNCTION__, "| CollectibleFarm mode requires non-empty refresh_trader_shopping_list");
             return false;
         }
@@ -135,6 +132,48 @@ bool asst::RoguelikeConfig::verify_and_load_params(const json::value& params)
     }
 
     return true;
+}
+
+std::vector<std::string> asst::RoguelikeConfig::parse_refresh_trader_shopping_list(const json::value& params)
+{
+    std::vector<std::string> list;
+    const auto opt = params.find<json::array>("refresh_trader_shopping_list");
+    if (!opt) {
+        return list;
+    }
+
+    // 把中文分号、换行统一成 ';'，再按 ';' 切开（兼容旧 GUI 未拆开的整段配置）
+    constexpr std::string_view kCnSemicolon = "；"; // U+FF1B
+    for (const auto& name : *opt) {
+        std::string raw = name.as_string();
+        if (raw.empty()) {
+            continue;
+        }
+        utils::string_replace_all_in_place(raw, { { kCnSemicolon, ";" }, { "\r\n", ";" }, { "\n", ";" }, { "\r", ";" } });
+
+        size_t start = 0;
+        while (start <= raw.size()) {
+            const size_t pos = raw.find(';', start);
+            std::string part = raw.substr(start, pos == std::string::npos ? std::string::npos : pos - start);
+            // trim spaces
+            const auto first = part.find_first_not_of(" \t");
+            if (first == std::string::npos) {
+                part.clear();
+            }
+            else {
+                const auto last = part.find_last_not_of(" \t");
+                part = part.substr(first, last - first + 1);
+            }
+            if (!part.empty()) {
+                list.emplace_back(std::move(part));
+            }
+            if (pos == std::string::npos) {
+                break;
+            }
+            start = pos + 1;
+        }
+    }
+    return list;
 }
 
 void asst::RoguelikeConfig::clear()

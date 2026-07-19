@@ -102,6 +102,9 @@ public:
     }
 
     bool verify_and_load_params(const json::value& params);
+
+    /// 解析刷藏品列表：兼容英文/中文分号与换行（含「整段未拆开」的旧配置）
+    static std::vector<std::string> parse_refresh_trader_shopping_list(const json::value& params);
     void clear(); // 重置肉鸽局内数据
 
     // ================================= 通用参数 =================================
