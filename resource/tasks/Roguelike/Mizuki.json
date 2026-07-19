@@ -477,6 +477,43 @@
         ],
         "onErrorNext": ["Mizuki@Roguelike@ExitThenAbandon"]
     },
+    "Mizuki@Roguelike@Stages_investment": {
+        "Doc": "刷源石锭一层：商店优先，不期而遇靠前，作战/紧急作战最低",
+        "algorithm": "JustReturn",
+        "next": [
+            "Mizuki@Roguelike@NextLevel",
+            "Mizuki@Roguelike@CommissionedMissionCompleted",
+            "Mizuki@Roguelike@StageTrader",
+            "Mizuki@Roguelike@StageEncounter",
+            "Mizuki@Roguelike@StageSafeHouse",
+            "Mizuki@Roguelike@StageWindAndRain",
+            "Mizuki@Roguelike@StageEmergencyTransportation",
+            "Mizuki@Roguelike@StageBoons",
+            "Mizuki@Roguelike@StageGambling",
+            "Mizuki@Roguelike@StageRegionalCommissioning",
+            "Mizuki@Roguelike@DiceConfirm",
+            "Mizuki@Roguelike@Stages@(Mizuki@Roguelike@CloseCollectionContinue)",
+            "Mizuki@Roguelike@Stages@(Mizuki@Roguelike@CloseCollectionClose)",
+            "Mizuki@Roguelike@StageDreadfulFoe",
+            "Mizuki@Roguelike@StageDreadfulFoe-5",
+            "Mizuki@Roguelike@StageCombatOps",
+            "Mizuki@Roguelike@StageEmergencyOps"
+        ],
+        "onErrorNext": ["Mizuki@Roguelike@ExitThenAbandon"]
+    },
+    "Mizuki@Roguelike@Stages_collectibleFarm": {
+        "Doc": [
+            "mode8 现与 mode0 相同走 Stages_default + StrategyChange_mode8；",
+            "本任务保留作兼容/兜底，不主动寻店；进店仍由 CustomShopping 处理。"
+        ],
+        "baseTask": "Mizuki@Roguelike@Stages_default"
+    },
+    "Mizuki@Roguelike@Stages_restart": {
+        "Doc": "遗留兜底（一般不再用）",
+        "algorithm": "JustReturn",
+        "next": ["Mizuki@Roguelike@ExitThenAbandon"],
+        "onErrorNext": ["Mizuki@Roguelike@ExitThenAbandon"]
+    },
     "Mizuki@Roguelike@Stages_pragmatic": {
         "Doc": "避紧急作战,3-4层策略",
         "algorithm": "JustReturn",
@@ -518,15 +555,28 @@
         ]
     },
     "Mizuki@Roguelike@StrategyChange_mode1": {
-        "text": ["_default", "_exit"],
+        "text": ["_investment", "_exit"],
         "ocrReplace": [
-            ["天光海岸", "_default"],
+            ["天光海岸", "_investment"],
             ["离岸孤岛", "_exit"],
             ["波涛略地", "_exit"],
             ["隐秘温床", "_exit"],
             ["失尘岩洞", "_exit"],
             ["幽海丛林", "_exit"],
             ["绀碧摇篮", "_exit"]
+        ]
+    },
+    "Mizuki@Roguelike@StrategyChange_mode8": {
+        "Doc": "刷目标藏品：与 mode0 相同，打到失败或通关；不特搜商店，进店走 CustomShopping",
+        "text": ["_aggressive", "_pragmatic", "_default"],
+        "ocrReplace": [
+            ["天光海岸", "_aggressive"],
+            ["离岸孤岛", "_aggressive"],
+            ["波涛略地", "_pragmatic"],
+            ["隐秘温床", "_pragmatic"],
+            ["失尘岩洞", "_default"],
+            ["幽海丛林", "_default"],
+            ["绀碧摇篮", "_SKIP_"]
         ]
     },
     "Mizuki@Roguelike@StrategyChange_mode4": {

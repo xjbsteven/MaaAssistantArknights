@@ -26,6 +26,9 @@ bool asst::RoguelikeShoppingTaskPlugin::verify(AsstMsg msg, const json::value& d
     else if (m_config->get_mode() == RoguelikeMode::Collectible) {
         return m_config->get_collectible_mode_shopping();
     }
+    else if (m_config->get_mode() == RoguelikeMode::CollectibleFarm) {
+        return false; // 刷藏品只由 CustomShopping 插件按列表购买
+    }
     return true;
 }
 

@@ -1,5 +1,7 @@
 #include "RoguelikeConfig.h"
 
+#include <algorithm>
+
 #include "Config/TaskData.h"
 #include "Utils/Logger.hpp"
 
@@ -45,7 +47,15 @@ bool asst::RoguelikeConfig::verify_and_load_params(const json::value& params)
 
     // 设置层数选点策略，相关逻辑在 RoguelikeStrategyChangeTaskPlugin
     {
-        Task.set_task_base(m_theme + "@Roguelike@Stages", m_theme + "@Roguelike@Stages_default");
+        // 刷源石锭：Stages_investment；其余（含刷藏品）用 Stages_default，由 StrategyChange 换层策略
+        const std::string stages_task = m_theme + "@Roguelike@Stages";
+        const std::string investment_stages = m_theme + "@Roguelike@Stages_investment";
+        if (m_mode == RoguelikeMode::Investment && Task.get(investment_stages) != nullptr) {
+            Task.set_task_base(stages_task, investment_stages);
+        }
+        else {
+            Task.set_task_base(stages_task, m_theme + "@Roguelike@Stages_default");
+        }
         std::string strategy_task = m_theme + "@Roguelike@StrategyChange";
         std::string strategy_task_with_mode = strategy_task + "_mode" + std::to_string(static_cast<int>(mode));
         if (Task.get(strategy_task_with_mode) == nullptr) {
@@ -86,6 +96,17 @@ bool asst::RoguelikeConfig::verify_and_load_params(const json::value& params)
                 // 启用刷常乐节点策略，联动 RoguelikeRoutingTaskPlugin
                 Task.set_task_base(strategy_task, "JieGarden@Roguelike@StrategyChange_mode20001");
             }
+        }
+    }
+
+    if (m_mode == RoguelikeMode::CollectibleFarm) {
+        bool has_list = false;
+        if (auto opt = params.find<json::array>("refresh_trader_shopping_list"); opt) {
+            has_list = std::ranges::any_of(*opt, [](const json::value& name) { return !name.as_string().empty(); });
+        }
+        if (!has_list) {
+            Log.error(__FUNCTION__, "| CollectibleFarm mode requires non-empty refresh_trader_shopping_list");
+            return false;
         }
     }
 

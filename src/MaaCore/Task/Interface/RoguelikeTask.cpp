@@ -1,5 +1,7 @@
 #include "RoguelikeTask.h"
 
+#include <algorithm>
+
 #include "Common/AsstBattleDef.h"
 #include "Config/TaskData.h"
 #include "Task/ProcessTask.h"
@@ -21,6 +23,8 @@
 #include "Task/Roguelike/RoguelikeRecruitTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeResetTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeSettlementTaskPlugin.h"
+#include "Task/Roguelike/RoguelikeCollectibleSelectTaskPlugin.h"
+#include "Task/Roguelike/RoguelikeCustomShoppingTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeShoppingTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeSkillSelectionTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeStageEncounterTaskPlugin.h"
@@ -65,6 +69,10 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
     m_debug_ptr = m_roguelike_task_ptr->register_plugin<RoguelikeDebugTaskPlugin>(m_config_ptr, m_control_ptr);
     m_custom_ptr = m_roguelike_task_ptr->register_plugin<RoguelikeCustomStartTaskPlugin>(m_config_ptr, m_control_ptr);
     m_roguelike_task_ptr->register_plugin<RoguelikeShoppingTaskPlugin>(m_config_ptr, m_control_ptr)->set_retry_times(0);
+    m_roguelike_task_ptr->register_plugin<RoguelikeCustomShoppingTaskPlugin>(m_config_ptr, m_control_ptr)
+        ->set_retry_times(0);
+    m_roguelike_task_ptr->register_plugin<RoguelikeCollectibleSelectTaskPlugin>(m_config_ptr, m_control_ptr)
+        ->set_retry_times(0);
 
     m_roguelike_task_ptr->register_plugin<RoguelikeBattleTaskPlugin>(m_config_ptr, m_control_ptr)
         ->set_retry_times(0)
@@ -188,9 +196,27 @@ bool asst::RoguelikeTask::set_params(const json::value& params)
     m_roguelike_task_ptr->set_times_limit(
         "StageTraderInvestSystem",
         params.get("investment_enabled", true) ? INT_MAX : 0);
+
+    const bool custom_trader_shopping = mode == RoguelikeMode::CollectibleFarm;
+    m_roguelike_task_ptr->set_times_limit("StageTraderCustomShopping", custom_trader_shopping ? INT_MAX : 0);
+    // 刷藏品时刷新由插件内执行；其他模式仍可用指路鳞开关
+    const bool refresh_with_dice = params.get("refresh_trader_with_dice", false);
     m_roguelike_task_ptr->set_times_limit(
         "StageTraderRefreshWithDice",
-        params.get("refresh_trader_with_dice", false) ? INT_MAX : 0);
+        (!custom_trader_shopping && refresh_with_dice) ? INT_MAX : 0);
+
+    // CollectibleFarm：CustomShopping 后离店继续；战后 GetDropSelect 改 DoNothing 由优先选择插件点选。
+    // 禁止对 CustomShopping 做 set_task_base 换 base（会丢 template 并 FATAL 缺图）。
+    if (custom_trader_shopping) {
+        m_roguelike_task_ptr->set_times_limit("StageTraderInvestSystem", 0);
+        if (auto drop_select = Task.get(theme + "@Roguelike@GetDropSelect")) {
+            drop_select->action = ProcessTaskAction::DoNothing;
+        }
+        Log.info(__FUNCTION__, "| CollectibleFarm: leave after CustomShopping; GetDropSelect=DoNothing");
+    }
+    else if (auto drop_select = Task.get(theme + "@Roguelike@GetDropSelect")) {
+        drop_select->action = ProcessTaskAction::ClickSelf;
+    }
 
     for (const auto& plugin : m_roguelike_task_ptr->get_plugins()) {
         if (const auto& p_ptr = std::dynamic_pointer_cast<AbstractRoguelikeTaskPlugin>(plugin); p_ptr != nullptr) {
