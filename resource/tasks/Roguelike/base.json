@@ -1461,12 +1461,6 @@
             "Roguelike@StageTraderLeaveConfirm"
         ]
     },
-    "Roguelike@GetDropSelectCollectibleOcr": {
-        "Doc": "刷藏品战后几选一：OCR 选项名称（与 GetDropSelect「选择」按钮按 x 对齐）",
-        "algorithm": "OcrDetect",
-        "text": [],
-        "roi": [0, 40, 1280, 360]
-    },
     "Roguelike@StageTraderInvest-Arrow": {
         "templThreshold": 0.75,
         "doc": "商店投资界面的箭头，99 >> 100",
