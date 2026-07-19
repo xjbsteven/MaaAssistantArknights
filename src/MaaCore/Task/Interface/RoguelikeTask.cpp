@@ -23,6 +23,7 @@
 #include "Task/Roguelike/RoguelikeRecruitTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeResetTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeSettlementTaskPlugin.h"
+#include "Task/Roguelike/RoguelikeCollectibleSelectTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeCustomShoppingTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeShoppingTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeSkillSelectionTaskPlugin.h"
@@ -69,6 +70,9 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
     m_custom_ptr = m_roguelike_task_ptr->register_plugin<RoguelikeCustomStartTaskPlugin>(m_config_ptr, m_control_ptr);
     m_roguelike_task_ptr->register_plugin<RoguelikeShoppingTaskPlugin>(m_config_ptr, m_control_ptr)->set_retry_times(0);
     m_roguelike_task_ptr->register_plugin<RoguelikeCustomShoppingTaskPlugin>(m_config_ptr, m_control_ptr)
+        ->set_retry_times(0);
+    // 战后几选一：不改 GetDropSelect 的 action/next；仅在 SubTaskStart 时截图，必要时改写点击坐标
+    m_roguelike_task_ptr->register_plugin<RoguelikeCollectibleSelectTaskPlugin>(m_config_ptr, m_control_ptr)
         ->set_retry_times(0);
 
     m_roguelike_task_ptr->register_plugin<RoguelikeBattleTaskPlugin>(m_config_ptr, m_control_ptr)
@@ -204,7 +208,7 @@ bool asst::RoguelikeTask::set_params(const json::value& params)
 
     // CollectibleFarm：CustomShopping 后离店继续。
     // 禁止对 CustomShopping 做 set_task_base 换 base（会丢 template 并 FATAL 缺图）。
-    // 战后几选一优先选择已暂时回退；完整实现见分支 wip/roguelike-collectible-select。
+    // 战后几选一由 CollectibleSelect 插件在原 GetDropSelect ClickSelf 前改写坐标（不改 action）。
     if (custom_trader_shopping) {
         m_roguelike_task_ptr->set_times_limit("StageTraderInvestSystem", 0);
         Log.info(__FUNCTION__, "| CollectibleFarm: leave after CustomShopping");
