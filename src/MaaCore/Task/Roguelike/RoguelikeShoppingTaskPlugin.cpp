@@ -9,8 +9,6 @@
 #include "Task/ProcessTask.h"
 #include "Task/Roguelike/RoguelikeTraderGoodsHelper.h"
 #include "Utils/Logger.hpp"
-#include "Vision/Matcher.h"
-#include "Vision/OCRer.h"
 
 bool asst::RoguelikeShoppingTaskPlugin::verify(AsstMsg msg, const json::value& details) const
 {
