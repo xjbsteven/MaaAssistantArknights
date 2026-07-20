@@ -13,6 +13,7 @@ option(WITH_EMULATOR_EXTRAS "build with emulator extras" ${WIN32})
 option(WITH_MAC_SCK "build with macOS ScreenCaptureKit" ${APPLE})
 option(WITH_HASH_VERSION "generate version from git hash" OFF)
 option(BUILD_RESOURCE_UPDATER "build resource updater tool" OFF)
+option(BUILD_TRADER_OCR_TEST "build roguelike trader OCR test tool" OFF)
 
 if(INSTALL_FLATTEN)
     set(RPATH_LIBRARY_INSTALL_DIR .)
@@ -70,4 +71,8 @@ endif()
 
 if(BUILD_RESOURCE_UPDATER)
     add_subdirectory(tools/ResourceUpdater)
+endif()
+
+if(BUILD_TRADER_OCR_TEST)
+    add_subdirectory(tools/trader_ocr_test)
 endif()

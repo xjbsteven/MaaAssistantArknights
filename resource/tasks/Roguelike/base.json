@@ -358,7 +358,7 @@
     "RoguelikeTraderShoppingOcr": {
         "algorithm": "OcrDetect",
         "text": [],
-        "roi": [406, 90, 825, 284],
+        "roi": [406, 90, 825, 350],
         "ocrReplace": [["指路.*", "指路鳞"]]
     },
     "RoguelikeTraderShoppingOver": {
