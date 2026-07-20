@@ -504,15 +504,15 @@
     "Mizuki@Roguelike@Stages_collectibleFarm": {
         "Doc": [
             "mode8 刷目标藏品专用选点：基于 Stages_default；",
-            "得偿所愿提到第二；地区委托提到作战前；所有层统一使用本表。",
+            "得偿所愿紧随商店之后；地区委托提到作战前；所有层统一使用本表。",
             "进店仍由 CustomShopping 处理。"
         ],
         "algorithm": "JustReturn",
         "next": [
             "Mizuki@Roguelike@NextLevel",
             "Mizuki@Roguelike@CommissionedMissionCompleted",
-            "Mizuki@Roguelike@StageBoons",
             "Mizuki@Roguelike@StageTrader",
+            "Mizuki@Roguelike@StageBoons",
             "Mizuki@Roguelike@StageSafeHouse",
             "Mizuki@Roguelike@StageWindAndRain",
             "Mizuki@Roguelike@StageEmergencyTransportation",
