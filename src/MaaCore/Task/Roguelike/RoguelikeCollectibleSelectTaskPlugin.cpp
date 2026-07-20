@@ -18,21 +18,8 @@ bool asst::RoguelikeCollectibleSelectTaskPlugin::verify(AsstMsg msg, const json:
     }
 
     const std::string task = details.get("details", "task", "");
-    // 实测多选链路：GetDropBoxOpen →（界面出现）→ GetDropSelectReward（「获得」标题误点）
-    // GetDropSelect 有时分不够高，进不来；必须挂到真实走过的任务上，且不改任务链/action
-    if (task.ends_with("Roguelike@GetDropBoxOpen")) {
-        m_trigger = Trigger::BoxOpen;
-        return true;
-    }
-    if (task.ends_with("Roguelike@GetDropSelect")) {
-        m_trigger = Trigger::Select;
-        return true;
-    }
-    if (task.ends_with("Roguelike@GetDropSelectReward")) {
-        m_trigger = Trigger::SelectReward;
-        return true;
-    }
-    return false;
+    // 水月战后二选一：实际走 GetDropSelectReward（「获得」），只需截这一屏做 OCR 校准
+    return task.ends_with("Roguelike@GetDropSelectReward");
 }
 
 bool asst::RoguelikeCollectibleSelectTaskPlugin::load_params(const json::value& params)
@@ -63,31 +50,7 @@ bool asst::RoguelikeCollectibleSelectTaskPlugin::_run()
     LogTraceFunction;
 
     ++m_select_snapshot_index;
-    const char* trigger_tag = "select";
-    switch (m_trigger) {
-    case Trigger::BoxOpen:
-        trigger_tag = "box_open";
-        break;
-    case Trigger::SelectReward:
-        trigger_tag = "select_reward";
-        break;
-    case Trigger::Select:
-        trigger_tag = "select";
-        break;
-    }
-    save_select_snapshot(std::format("{}_{}", trigger_tag, m_select_snapshot_index));
-
-    // 列表点开入口：只截图，点击仍由原 GetDropBoxOpen 执行
-    if (m_trigger == Trigger::BoxOpen) {
-        Log.info(__FUNCTION__, "GetDropBoxOpen: snapshot only");
-        return true;
-    }
-
-    // SelectReward：若画面上没有「选择」按钮，是真·获得确认，不改坐标
-    if (m_trigger == Trigger::SelectReward && !has_select_buttons()) {
-        Log.info(__FUNCTION__, "GetDropSelectReward without select buttons, keep original 获得 click");
-        return true;
-    }
+    save_select_snapshot(std::format("select_reward_{}", m_select_snapshot_index));
 
     const auto preferred = find_preferred_select_rect();
     if (!preferred) {
@@ -112,7 +75,7 @@ bool asst::RoguelikeCollectibleSelectTaskPlugin::_run()
 
     auto info = basic_info_with_what("RoguelikeCollectibleSelected");
     info["details"]["rect"] = preferred->to_string();
-    info["details"]["trigger"] = trigger_tag;
+    info["details"]["trigger"] = "select_reward";
     callback(AsstMsg::SubTaskExtraInfo, info);
     return true;
 }
@@ -134,19 +97,21 @@ void asst::RoguelikeCollectibleSelectTaskPlugin::save_select_snapshot(std::strin
     }
 }
 
-bool asst::RoguelikeCollectibleSelectTaskPlugin::has_select_buttons()
+void asst::RoguelikeCollectibleSelectTaskPlugin::log_ocr_results(const std::vector<OCRer::Result>& ocr_results)
 {
-    auto image = ctrler()->get_image();
-    const std::string& theme = m_config->get_theme();
-
-    MultiMatcher buttons(image);
-    buttons.set_task_info(theme + "@Roguelike@GetDropSelect");
-    if (buttons.analyze()) {
-        return true;
+    if (ocr_results.empty()) {
+        Log.info(__FUNCTION__, "OCR empty in GetDropSelectCollectibleOcr roi");
+        return;
     }
-    // 水月多选「选择」有时更接近密匣打开模板
-    buttons.set_task_info(theme + "@Roguelike@GetDropBoxOpen");
-    return buttons.analyze().has_value();
+
+    std::string summary;
+    for (const auto& tr : ocr_results) {
+        if (!summary.empty()) {
+            summary += " | ";
+        }
+        summary += std::format("{}@{}", tr.text, tr.rect.to_string());
+    }
+    Log.info(__FUNCTION__, "OCR results:", summary);
 }
 
 std::optional<asst::Rect> asst::RoguelikeCollectibleSelectTaskPlugin::find_preferred_select_rect()
@@ -155,12 +120,16 @@ std::optional<asst::Rect> asst::RoguelikeCollectibleSelectTaskPlugin::find_prefe
     const std::string& theme = m_config->get_theme();
 
     MultiMatcher buttons(image);
-    buttons.set_task_info(theme + "@Roguelike@GetDropSelect");
+    // 二选一界面底部是「获得」按钮，不是「选择」
+    buttons.set_task_info(theme + "@Roguelike@GetDropSelectReward");
     if (!buttons.analyze()) {
-        buttons.set_task_info(theme + "@Roguelike@GetDropBoxOpen");
+        buttons.set_task_info(theme + "@Roguelike@GetDropSelect");
         if (!buttons.analyze()) {
-            Log.warn(__FUNCTION__, "no select buttons for OCR align");
-            return std::nullopt;
+            buttons.set_task_info(theme + "@Roguelike@GetDropBoxOpen");
+            if (!buttons.analyze()) {
+                Log.warn(__FUNCTION__, "no reward/select buttons for OCR align");
+                return std::nullopt;
+            }
         }
     }
 
@@ -175,6 +144,8 @@ std::optional<asst::Rect> asst::RoguelikeCollectibleSelectTaskPlugin::find_prefe
     }
 
     const auto& ocr_results = analyzer.get_result();
+    log_ocr_results(ocr_results);
+
     for (const auto& target : m_shopping_list) {
         if (need_exit()) {
             return std::nullopt;
