@@ -503,10 +503,31 @@
     },
     "Mizuki@Roguelike@Stages_collectibleFarm": {
         "Doc": [
-            "mode8 现与 mode0 相同走 Stages_default + StrategyChange_mode8；",
-            "本任务保留作兼容/兜底，不主动寻店；进店仍由 CustomShopping 处理。"
+            "mode8 刷目标藏品专用选点：基于 Stages_default；",
+            "得偿所愿提到第二；地区委托提到作战前；所有层统一使用本表。",
+            "进店仍由 CustomShopping 处理。"
         ],
-        "baseTask": "Mizuki@Roguelike@Stages_default"
+        "algorithm": "JustReturn",
+        "next": [
+            "Mizuki@Roguelike@NextLevel",
+            "Mizuki@Roguelike@CommissionedMissionCompleted",
+            "Mizuki@Roguelike@StageBoons",
+            "Mizuki@Roguelike@StageTrader",
+            "Mizuki@Roguelike@StageSafeHouse",
+            "Mizuki@Roguelike@StageWindAndRain",
+            "Mizuki@Roguelike@StageEmergencyTransportation",
+            "Mizuki@Roguelike@StageEncounter",
+            "Mizuki@Roguelike@StageGambling",
+            "Mizuki@Roguelike@StageRegionalCommissioning",
+            "Mizuki@Roguelike@StageCombatOps",
+            "Mizuki@Roguelike@StageEmergencyOps",
+            "Mizuki@Roguelike@StageDreadfulFoe",
+            "Mizuki@Roguelike@StageDreadfulFoe-5",
+            "Mizuki@Roguelike@DiceConfirm",
+            "Mizuki@Roguelike@Stages@(Mizuki@Roguelike@CloseCollectionContinue)",
+            "Mizuki@Roguelike@Stages@(Mizuki@Roguelike@CloseCollectionClose)"
+        ],
+        "onErrorNext": ["Mizuki@Roguelike@ExitThenAbandon"]
     },
     "Mizuki@Roguelike@Stages_restart": {
         "Doc": "遗留兜底（一般不再用）",
@@ -567,16 +588,16 @@
         ]
     },
     "Mizuki@Roguelike@StrategyChange_mode8": {
-        "Doc": "刷目标藏品：与 mode0 相同，打到失败或通关；不特搜商店，进店走 CustomShopping",
-        "text": ["_aggressive", "_pragmatic", "_default"],
+        "Doc": "刷目标藏品：所有层统一 Stages_collectibleFarm；进店走 CustomShopping",
+        "text": ["_collectibleFarm"],
         "ocrReplace": [
-            ["天光海岸", "_aggressive"],
-            ["离岸孤岛", "_aggressive"],
-            ["波涛略地", "_pragmatic"],
-            ["隐秘温床", "_pragmatic"],
-            ["失尘岩洞", "_default"],
-            ["幽海丛林", "_default"],
-            ["绀碧摇篮", "_SKIP_"]
+            ["天光海岸", "_collectibleFarm"],
+            ["离岸孤岛", "_collectibleFarm"],
+            ["波涛略地", "_collectibleFarm"],
+            ["隐秘温床", "_collectibleFarm"],
+            ["失尘岩洞", "_collectibleFarm"],
+            ["幽海丛林", "_collectibleFarm"],
+            ["绀碧摇篮", "_collectibleFarm"]
         ]
     },
     "Mizuki@Roguelike@StrategyChange_mode4": {

@@ -48,11 +48,15 @@ bool asst::RoguelikeConfig::verify_and_load_params(const json::value& params)
 
     // 设置层数选点策略，相关逻辑在 RoguelikeStrategyChangeTaskPlugin
     {
-        // 刷源石锭：Stages_investment；其余（含刷藏品）用 Stages_default，由 StrategyChange 换层策略
+        // 刷源石锭：Stages_investment；刷藏品：Stages_collectibleFarm；其余用 Stages_default
         const std::string stages_task = m_theme + "@Roguelike@Stages";
         const std::string investment_stages = m_theme + "@Roguelike@Stages_investment";
+        const std::string collectible_farm_stages = m_theme + "@Roguelike@Stages_collectibleFarm";
         if (m_mode == RoguelikeMode::Investment && Task.get(investment_stages) != nullptr) {
             Task.set_task_base(stages_task, investment_stages);
+        }
+        else if (m_mode == RoguelikeMode::CollectibleFarm && Task.get(collectible_farm_stages) != nullptr) {
+            Task.set_task_base(stages_task, collectible_farm_stages);
         }
         else {
             Task.set_task_base(stages_task, m_theme + "@Roguelike@Stages_default");
