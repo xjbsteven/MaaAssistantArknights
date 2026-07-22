@@ -206,12 +206,23 @@ bool asst::RoguelikeTask::set_params(const json::value& params)
         "StageTraderRefreshWithDice",
         (!custom_trader_shopping && refresh_with_dice) ? INT_MAX : 0);
 
-    // CollectibleFarm：CustomShopping 后离店继续。
+    // CollectibleFarm：
+    // - 水月：自定义购物后直接离店（投资仍禁用）
+    // - 萨米：自定义购物后可按 investment_enabled 投资；禁用常规购物（TraderRandomShopping）
     // 禁止对 CustomShopping 做 set_task_base 换 base（会丢 template 并 FATAL 缺图）。
     // 战后几选一由 CollectibleSelect 插件在原 GetDropSelect ClickSelf 前改写坐标（不改 action）。
     if (custom_trader_shopping) {
-        m_roguelike_task_ptr->set_times_limit("StageTraderInvestSystem", 0);
-        Log.info(__FUNCTION__, "| CollectibleFarm: leave after CustomShopping");
+        if (theme == RoguelikeTheme::Mizuki) {
+            m_roguelike_task_ptr->set_times_limit("StageTraderInvestSystem", 0);
+            Log.info(__FUNCTION__, "| Mizuki CollectibleFarm: leave after CustomShopping (invest disabled)");
+        }
+        else if (theme == RoguelikeTheme::Sami) {
+            // 投资：沿用上面 investment_enabled 的 times_limit；只跳过常规货架购买
+            m_roguelike_task_ptr->set_times_limit("TraderRandomShopping", 0);
+            Log.info(
+                __FUNCTION__,
+                "| Sami CollectibleFarm: CustomShopping -> Invest(if enabled) -> Leave; no regular shopping");
+        }
     }
 
     for (const auto& plugin : m_roguelike_task_ptr->get_plugins()) {

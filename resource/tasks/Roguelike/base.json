@@ -1837,6 +1837,7 @@
             "Roguelike@StageTraderLeave",
             "Roguelike@StageTraderLeaveConfirm"
         ],
+        "exceededNext": ["Roguelike@StageTraderLeave", "Roguelike@StageTraderLeaveConfirm"],
         "maskRange": [1, 255]
     },
     "Roguelike@TraderRandomShoppingCancel": {

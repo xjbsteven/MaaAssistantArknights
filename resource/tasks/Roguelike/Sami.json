@@ -826,6 +826,21 @@
         "next": ["Sami@Roguelike@StageTraderEnter", "Sami@Roguelike@Stages#next"]
     },
     "Sami@Roguelike@StageTraderEnter": {},
+    "Sami@Roguelike@StageTraderCustomShopping": {
+        "Doc": [
+            "萨米刷藏品：自定义购物后进入投资（由 investment_enabled 控制），再离店；",
+            "不经 TraderRandomShopping（mode8 下 times_limit=0）。",
+            "next 必须用 Sami@ 前缀：否则会走到无 next 的 Roguelike@Stages，",
+            "LeaveConfirm 后只剩 #self，卡在远见（FoldartalGainNextLevel）页。"
+        ],
+        "baseTask": "Roguelike@StageTraderCustomShopping",
+        "template": "Roguelike@StageTraderLeave.png",
+        "next": [
+            "Sami@Roguelike@StageTraderInvestSystem",
+            "Sami@Roguelike@StageTraderLeave",
+            "Sami@Roguelike@StageTraderLeaveConfirm"
+        ]
+    },
     "Sami@Roguelike@StageTraderLeaveConfirm": {
         "template": "Roguelike@StageTraderLeaveConfirm.png",
         "postDelay": 1000,

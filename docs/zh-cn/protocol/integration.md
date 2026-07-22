@@ -610,6 +610,8 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 <br>
 进诡意行商后按列表 OCR 购买；找不到则刷新（Mizuki 指路鳞，Sami 免费刷新）；刷新用尽仍没有则离店继续推进。
 <br>
+Sami 下若开启 `investment_enabled`，自定义购物结束后会进入投资，再离店；**不会**走常规货架购买（`TraderRandomShopping`）。Mizuki 刷藏品暂不投资。
+<br>
 战后藏品几选一：仍走原有 `GetDropSelect`（识别「选择」并 ClickSelf）；插件仅在点击前截图，若 OCR 命中列表则改写本次点击坐标，未命中则完全保持原点击。  
 <br>
 几选一截图目录：`debug/roguelike/collectibleSelect/`（与商店截图目录平行，不自动清理）。  
@@ -622,7 +624,7 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 <br>
 若识别到目标但源石锭不足，会暂停任务并停留在购买界面，等待用户手动处理。  
 <br>
-投资源石锭仍由上方的 `investment_enabled` 控制，与本策略独立。  
+投资源石锭仍由上方的 `investment_enabled` 控制。Sami 刷藏品可投资；Mizuki 刷藏品当前不投资。  
 :::  
 ::: field name="first_floor_foldartal" type="string" optional  
 希望在第一层远见阶段得到的密文版。仅适用于 Sami 主题，不限模式；若成功凹到则停止任务。  
