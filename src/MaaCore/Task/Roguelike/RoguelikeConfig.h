@@ -95,7 +95,8 @@ public:
     {
         return mode == RoguelikeMode::Exp || mode == RoguelikeMode::Investment || mode == RoguelikeMode::Collectible ||
                mode == RoguelikeMode::Squad || mode == RoguelikeMode::Exploration ||
-               (mode == RoguelikeMode::CollectibleFarm && theme == RoguelikeTheme::Mizuki) ||
+               (mode == RoguelikeMode::CollectibleFarm &&
+                (theme == RoguelikeTheme::Mizuki || theme == RoguelikeTheme::Sami)) ||
                (mode == RoguelikeMode::CLP_PDS && theme == RoguelikeTheme::Sami) ||
                (mode == RoguelikeMode::FastPass && theme == RoguelikeTheme::Sarkaz) ||
                (mode == RoguelikeMode::FindPlaytime && theme == RoguelikeTheme::JieGarden);

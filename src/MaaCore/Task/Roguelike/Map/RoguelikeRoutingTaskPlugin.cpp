@@ -19,11 +19,10 @@ bool asst::RoguelikeRoutingTaskPlugin::load_params([[maybe_unused]] const json::
     const std::string& theme = m_config->get_theme();
     const RoguelikeMode& mode = m_config->get_mode();
 
-    // 对照 2026-07-18 已跑通：水月刷藏品只用 Stages 模板优先级 + CustomShopping→ExitThenAbandon，
-    // 不启用本插件的 Peek/全图扫（那是后来加的，会战后误放弃）。
-    if (theme == RoguelikeTheme::Mizuki && mode == RoguelikeMode::CollectibleFarm) {
-        // 水月刷藏品用 Stages 模板优先级 + CustomShopping→ExitThenAbandon，不走本插件寻路
-        Log.info(__FUNCTION__, "| Mizuki CollectibleFarm: routing disabled (Stages-only)");
+    // 水月/萨米刷藏品：只用 Stages 模板优先级 + CustomShopping，不启用寻路插件。
+    if ((theme == RoguelikeTheme::Mizuki || theme == RoguelikeTheme::Sami) &&
+        mode == RoguelikeMode::CollectibleFarm) {
+        Log.info(__FUNCTION__, "| CollectibleFarm: routing disabled (Stages-only), theme:", theme);
         return false;
     }
 
