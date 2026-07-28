@@ -126,6 +126,15 @@ public class RecruitSettingsUserControlModel : TaskSettingsViewModel, RecruitSet
         set => SetTaskConfig<RecruitTask>(t => t.ForceRefresh == value, t => t.ForceRefresh = value);
     }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether to force-confirm low-star recruits to meet max times.
+    /// </summary>
+    public bool ForceConfirmToMeetTimes
+    {
+        get => GetTaskConfig<RecruitTask>().ForceConfirmToMeetTimes;
+        set => SetTaskConfig<RecruitTask>(t => t.ForceConfirmToMeetTimes == value, t => t.ForceConfirmToMeetTimes = value);
+    }
+
     public bool? UseExpeditedWithNull
     {
         get => GetTaskConfig<RecruitTask>().UseExpedited;
@@ -289,6 +298,7 @@ public class RecruitSettingsUserControlModel : TaskSettingsViewModel, RecruitSet
             var task = new AsstRecruitTask() {
                 Refresh = recruit.RefreshLevel3,
                 ForceRefresh = recruit.ForceRefresh,
+                ForceConfirmToMeetTimes = recruit.ForceConfirmToMeetTimes,
                 SetRecruitTime = true,
                 RecruitTimes = recruit.MaxTimes,
                 UseExpedited = recruit.UseExpedited is not false,

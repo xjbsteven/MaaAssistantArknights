@@ -343,6 +343,15 @@ B服：`张三`，可输入 `张三`、`张`、`三`
 @optional
 招募多少次。若仅公招计算，可设置为 0。  
 :::  
+::: field force_confirm_to_meet_times  
+@type boolean
+@default false
+@optional
+是否优先保证最大招募数量。  
+<br>
+勾选后，为凑满 `times`，当剩余空位数量 ≤ 仍需招募次数时，允许对未勾选自动确认的低星（主要是 3 星，以及 `confirm` 未包含的 4 星）强制确认。  
+仍会先按 `refresh` 刷新；`preserve_tags` 保留词条与未确认的 5/6 星不会被强制确认；`times` 为 0（仅计算）时本选项无效。  
+:::  
 ::: field set_time  
 @type boolean
 @default true
@@ -426,6 +435,7 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
    "first_tags": ["高级资深干员"],
    "extra_tags_mode": 1,
    "times": 4,
+   "force_confirm_to_meet_times": false,
    "set_time": true,
    "expedite": false,
    "expedite_times": 0,

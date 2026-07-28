@@ -343,6 +343,15 @@ Select more tags.
 @optional
 Number of recruitments. Can be set to 0 for calculation only.  
 :::  
+::: field force_confirm_to_meet_times  
+@type boolean
+@default false
+@optional
+Whether to prioritize meeting the maximum recruitment count.  
+<br>
+When enabled, to fill up `times`, if remaining empty slots ≤ remaining needed recruits, MAA may force-confirm unconfirmed low-star results (mainly 3★, and 4★ when not in `confirm`).  
+Refresh still runs first when `refresh` is on; `preserve_tags` slots and unconfirmed 5★/6★ are never force-confirmed; ineffective when `times` is 0 (calc only).  
+:::  
 ::: field set_time  
 @type boolean
 @default true
@@ -426,6 +435,7 @@ Options: `CN` | `US` | `JP` | `KR`
    "first_tags": ["高级资深干员"],
    "extra_tags_mode": 1,
    "times": 4,
+   "force_confirm_to_meet_times": false,
    "set_time": true,
    "expedite": false,
    "expedite_times": 0,

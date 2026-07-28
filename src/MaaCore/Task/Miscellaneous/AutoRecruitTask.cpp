@@ -174,6 +174,12 @@ asst::AutoRecruitTask& asst::AutoRecruitTask::set_force_refresh(bool force_refre
     return *this;
 }
 
+asst::AutoRecruitTask& asst::AutoRecruitTask::set_force_confirm_to_meet_times(bool force_confirm) noexcept
+{
+    m_force_confirm_to_meet_times = force_confirm;
+    return *this;
+}
+
 asst::AutoRecruitTask& asst::AutoRecruitTask::set_recruitment_time(std::unordered_map<int, int> time_map) noexcept
 {
     m_desired_time_map = std::move(time_map);
@@ -230,7 +236,22 @@ bool asst::AutoRecruitTask::_run()
     bool try_use_expedited = m_use_expedited;
 
     while (m_cur_times < m_max_times) {
-        auto start_rect = try_get_start_button(ctrler()->get_image());
+        // Count remaining empty slots on the recruit home page before entering a slot
+        // (OCR "开始招募", excluding m_force_skipped). Passed into calc for force-confirm.
+        const auto home_image = ctrler()->get_image();
+        const auto start_buttons = start_recruit_analyze(home_image);
+        int remaining_slots = 0;
+        std::optional<Rect> start_rect;
+        for (const auto& r : start_buttons) {
+            if (m_force_skipped.contains(slot_index_from_rect(r.rect))) {
+                continue;
+            }
+            ++remaining_slots;
+            if (!start_rect) {
+                start_rect = r.rect;
+                Log.info("Found slot index", slot_index_from_rect(r.rect), ".");
+            }
+        }
         if (start_rect) {
             if (need_exit()) {
                 return false;
@@ -238,7 +259,7 @@ bool asst::AutoRecruitTask::_run()
             if (m_slot_fail >= slot_retry_limit) {
                 return false;
             }
-            auto result = recruit_one(start_rect.value());
+            auto result = recruit_one(start_rect.value(), remaining_slots);
             // confirmed: real recruitment done, advance m_cur_times
             // skipped:   slot marked in m_force_skipped, try next slot without changing counters
             // failed:    recognition error / no permit / etc., bump m_slot_fail for retry limiting
@@ -321,6 +342,16 @@ std::optional<asst::Rect> asst::AutoRecruitTask::try_get_start_button(const cv::
     return iter->rect;
 }
 
+bool asst::AutoRecruitTask::should_force_confirm_low_level(int level, int remaining_slots) const
+{
+    // Never force 5/6; only degrade to unconfirmed 3/4 to meet times.
+    if (!m_force_confirm_to_meet_times || m_max_times <= 0 || level >= 5 || remaining_slots <= 0) {
+        return false;
+    }
+    const int remaining_needed = m_max_times - m_cur_times;
+    return remaining_slots <= remaining_needed;
+}
+
 /// Open a pending recruit slot, analyze tags, set timer and tags, then confirm or skip.
 /// Returns:
 /// - confirmed: RecruitConfirm was executed successfully
@@ -328,7 +359,7 @@ std::optional<asst::Rect> asst::AutoRecruitTask::try_get_start_button(const cv::
 ///              no recruit permit); slot is added to m_force_skipped so the loop tries the
 ///              next slot without changing any counters
 /// - failed:    recognition error, timer mismatch, confirm failure, or exit requested
-asst::AutoRecruitTask::recruit_result asst::AutoRecruitTask::recruit_one(const Rect& button)
+asst::AutoRecruitTask::recruit_result asst::AutoRecruitTask::recruit_one(const Rect& button, int remaining_slots)
 {
     LogTraceFunction;
 
@@ -337,7 +368,7 @@ asst::AutoRecruitTask::recruit_result asst::AutoRecruitTask::recruit_one(const R
     ctrler()->click(button);
     sleep(delay);
 
-    auto calc_result = recruit_calc_task(slot_index_from_rect(button));
+    auto calc_result = recruit_calc_task(slot_index_from_rect(button), remaining_slots);
     sleep(delay);
 
     if (!calc_result.success) {
@@ -395,7 +426,9 @@ asst::AutoRecruitTask::recruit_result asst::AutoRecruitTask::recruit_one(const R
 }
 
 // set recruit timer and tags only
-asst::AutoRecruitTask::calc_task_result_type asst::AutoRecruitTask::recruit_calc_task(slot_index index)
+asst::AutoRecruitTask::calc_task_result_type asst::AutoRecruitTask::recruit_calc_task(
+    slot_index index,
+    int remaining_slots)
 {
     LogTraceFunction;
 
@@ -686,21 +719,44 @@ asst::AutoRecruitTask::calc_task_result_type asst::AutoRecruitTask::recruit_calc
         }
 
         if (!is_calc_only_task()) {
+            // After refresh ends: optionally force-confirm unconfirmed 3/4 to meet times.
+            // remaining_slots was counted on the recruit home page before entering this slot.
+            // Never force 5/6 (special_tag_skip) or preserve_tags slots.
             if (!(has_skip_tag || has_special_tag)) {
-                // do not confirm 3 star, force skip
+                // do not confirm 3 star, force skip (unless force_confirm_to_meet_times)
                 if (!is_confirm_level_valid(3) && final_combination.min_level == 3 &&
                     !is_select_level_valid(final_combination.min_level)) {
+                    if (should_force_confirm_low_level(3, remaining_slots)) {
+                        Log.info(
+                            "force confirm 3★ to meet times (slots=",
+                            remaining_slots,
+                            ", needed=",
+                            m_max_times - m_cur_times,
+                            ")");
+                    }
+                    else {
+                        calc_task_result_type result(calc_task_result::force_skip);
+                        return result;
+                    }
+                }
+            }
+            // do not confirm 4 star (unless force_confirm_to_meet_times)
+            if (!is_confirm_level_valid(4) && final_combination.min_level == 4 &&
+                !is_select_level_valid(final_combination.min_level)) {
+                if (should_force_confirm_low_level(4, remaining_slots)) {
+                    Log.info(
+                        "force confirm 4★ to meet times (slots=",
+                        remaining_slots,
+                        ", needed=",
+                        m_max_times - m_cur_times,
+                        ")");
+                }
+                else {
                     calc_task_result_type result(calc_task_result::force_skip);
                     return result;
                 }
             }
-            // do not confirm 4 star
-            if (!is_confirm_level_valid(4) && final_combination.min_level == 4 &&
-                !is_select_level_valid(final_combination.min_level)) {
-                calc_task_result_type result(calc_task_result::force_skip);
-                return result;
-            }
-            // "Automatically recruit 5/6 Star operators" is not checked.
+            // "Automatically recruit 5/6 Star operators" is not checked. Never force for times.
             if (has_special_tag && !is_confirm_level_valid(final_combination.min_level)) {
                 calc_task_result_type result(calc_task_result::special_tag_skip);
                 return result;
