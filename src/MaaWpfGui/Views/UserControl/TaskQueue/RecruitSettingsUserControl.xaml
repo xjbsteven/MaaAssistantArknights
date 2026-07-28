@@ -24,6 +24,11 @@
                 Minimum="0"
                 Value="{Binding RecruitMaxTimes}" />
 
+            <CheckBox
+                Margin="0,10"
+                Content="{DynamicResource ForceConfirmToMeetTimes}"
+                IsChecked="{Binding ForceConfirmToMeetTimes}" />
+
             <StackPanel Margin="0,10" Orientation="Horizontal">
                 <CheckBox Content="{DynamicResource AutoUseExpedited}" IsChecked="{Binding UseExpeditedWithNull}" />
                 <controls:TooltipBlock TooltipText="{DynamicResource AutoUseExpeditedTip}" />

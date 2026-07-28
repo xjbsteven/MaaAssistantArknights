@@ -42,6 +42,11 @@ public class AsstRecruitTask : AsstBaseTask
     public bool ForceRefresh { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether 优先保证最大招募数量。
+    /// </summary>
+    public bool ForceConfirmToMeetTimes { get; set; }
+
+    /// <summary>
     /// Gets or sets 会去点击标签的 Tag 等级，必选
     /// </summary>
     public List<int> SelectList { get; set; } = [];
@@ -148,6 +153,7 @@ public class AsstRecruitTask : AsstBaseTask
         var param = new JObject {
             ["refresh"] = Refresh,
             ["force_refresh"] = ForceRefresh,
+            ["force_confirm_to_meet_times"] = ForceConfirmToMeetTimes,
             ["select"] = JArray.FromObject(SelectList),
             ["confirm"] = JArray.FromObject(ConfirmList),
             ["times"] = RecruitTimes,

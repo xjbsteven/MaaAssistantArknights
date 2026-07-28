@@ -263,6 +263,12 @@ B服：`张三`，可输入 `张三`、`张`、`三`
 ::: field name="times" type="number" optional default="0"  
 招募多少次。若仅公招计算，可设置为 0。  
 :::  
+::: field name="force_confirm_to_meet_times" type="boolean" optional default="false"  
+是否优先保证最大招募数量。  
+<br>
+勾选后，为凑满 `times`，当剩余空位数量 ≤ 仍需招募次数时，允许对未勾选自动确认的低星（主要是 3 星，以及 `confirm` 未包含的 4 星）强制确认。  
+仍会先按 `refresh` 刷新；`preserve_tags` 保留词条与未确认的 5/6 星不会被强制确认；`times` 为 0（仅计算）时本选项无效。  
+:::  
 ::: field name="set_time" type="boolean" optional default="true"  
 是否设置招募时限。仅在 `times` 为 0 时生效。  
 :::  
@@ -318,6 +324,7 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
    "first_tags": ["高级资深干员"],
    "extra_tags_mode": 1,
    "times": 4,
+   "force_confirm_to_meet_times": false,
    "set_time": true,
    "expedite": false,
    "expedite_times": 0,
@@ -350,49 +357,27 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 <br>
 `10000` - `Custom`: 自定义换班模式，读取用户配置，可参考 [基建排班协议](./base-scheduling-schema.md)。
 <br>
-自定义配置中的单个计划仍可通过 `strategy: "facility_preset"` 启用设施预设换班（兼容旧配置）。
-<br>
-`20000` - `Rotation`: 队列轮换模式。默认 `rotation_style = "game"` 时，在游戏内执行一键队列轮换，并跳过控制中枢、发电站、宿舍以及办公室的换班，其余设施保留基本操作。
-<br>
-当 `rotation_style = "station_preset"` 时，改为在「进驻总览」按 `preset.rooms` 点击预设切换按钮。可通过任务参数内联 `preset` 对象（GUI 推荐），或提供 `filename` + `plan_index` 读取 JSON（API / 兼容）。该子模式兼容宿舍信赖、未进驻筛选、源石碎片自动补货、会客室相关设置及训练室继续专精。多班次请使用多个基建任务，每个任务对应一个班次。
-:::  
-::: field name="rotation_style" type="string" optional default="game"  
-队列轮换子类型。`mode = 20000` 时有效。
-<br>
-`game` - 游戏内一键队列轮换。
-<br>
-`station_preset` - 进驻总览设施点预设。读取内联 `preset` 或 `filename` 中的 `preset` 配置。  
-:::  
-::: field name="preset" type="object" optional  
-设施预设换班配置。`rotation_style = "station_preset"` 且未提供 `filename` 时必填。
-<br>
-`rooms`: 需要点击预设切换按钮的设施 ID 列表，如 `Control`、`Mfg1`、`Trade1`、`Office`。
-<br>
-`rest`: 是否在工作区设施切换完成后进入非工作区并点击「干员休整」，可选，默认 `true`。  
+`20000` - `Rotation`: 一键轮换模式，会跳过控制中枢、发电站、宿舍以及办公室，其余设施不进行换班但保留基本操作（如使用无人机、会客室逻辑）。  
 :::  
 ::: field name="facility" type="array<string>" required  
 要换班的设施（有序）。不支持运行中设置。
 <br>
-`rotation_style = "station_preset"` 时该字段仅用于满足参数格式，不参与子任务编排。
-<br>
 设施名：`Mfg` | `Trade` | `Power` | `Control` | `Reception` | `Office` | `Dorm` | `Processing` | `Training`  
 :::  
-::: field name="drones" type="string | object" optional default="\_NotUse"  
-无人机用途。`mode = 10000` 时该字符串字段无效。
+::: field name="drones" type="string" optional default="\_NotUse"  
+无人机用途。`mode = 10000` 时该字段无效。
 <br>
-`rotation_style = "station_preset"` 时该字段为对象（与 Custom JSON plan 中 `drones` 结构相同）：`enable`、`room`（`trading` / `manufacture`）、`index`、`order`（`pre` / `post`）。未启用时可省略。
-<br>
-其他模式下为字符串，选项：`_NotUse` | `Money` | `SyntheticJade` | `CombatRecord` | `PureGold` | `OriginStone` | `Chip`  
+选项：`_NotUse` | `Money` | `SyntheticJade` | `CombatRecord` | `PureGold` | `OriginStone` | `Chip`  
 :::  
 ::: field name="threshold" type="number" optional default="0.3"  
 工作心情阈值，取值范围 [0, 1.0]。
 <br>
 `mode = 10000` 时该字段仅针对 "autofill" 有效。
 <br>
-`mode = 20000` 或 `rotation_style = "station_preset"` 时该字段无效。  
+`mode = 20000` 时该字段无效。  
 :::  
 ::: field name="replenish" type="boolean" optional default="false"  
-制造站“源石碎片”是否自动补货。`rotation_style = "station_preset"` 时有效。  
+贸易站“源石碎片”是否自动补货。  
 :::  
 ::: field name="dorm_notstationed_enabled" type="boolean" optional default="false"  
 是否启用宿舍“未进驻”选项。  
@@ -403,32 +388,21 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 ::: field name="reception_message_board" type="boolean" optional default="true"  
 是否领取会客室信息板信用。  
 :::  
-::: field name="reception_receive_clue" type="boolean" optional default="true"  
-是否接收会客室线索（好友线索与自有线索）。`rotation_style = "station_preset"` 或 Custom `strategy: facility_preset` 时有效。  
-:::  
 ::: field name="reception_clue_exchange" type="boolean" optional default="true"  
 是否进行线索交流。  
 :::  
 ::: field name="reception_send_clue" type="boolean" optional default="true"  
 是否赠送线索。  
 :::  
-::: field name="continue_training" type="boolean" optional default="false"  
-训练完成后是否继续尝试专精当前技能。`rotation_style = "station_preset"` 时有效。  
-:::  
-::: field name="filename" type="string" optional  
+::: field name="filename" type="string" required  
 自定义配置路径。不支持运行中设置。
 <br>
-<Badge type="warning" text="mode = 10000 时必填；rotation station_preset 可选（有内联 preset 时可省略）" />  
+<Badge type="warning" text="仅在 mode = 10000 时生效" />  
 :::  
-::: field name="plan_index" type="number" optional  
+::: field name="plan_index" type="number" required  
 使用配置中的方案序号。不支持运行中设置。
 <br>
-<Badge type="warning" text="mode = 10000 时生效；rotation station_preset 仅在提供 filename 时生效" />  
-:::  
-::: field name="auto_advance_plan_index" type="boolean" optional default="true"  
-手动选择班次（`plan_index >= 0`）时，任务完成后是否自动切换到下一班次（`(plan_index + 1) % plans.length`）。设为 `false` 则保持当前班次不变。
-<br>
-<Badge type="warning" text="mode = 10000 时生效" />  
+<Badge type="warning" text="仅在 mode = 10000 时生效" />  
 :::  
 ::::
 
@@ -446,7 +420,6 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
    "dorm_notstationed_enabled": false,
    "dorm_trust_enabled": true,
    "reception_message_board": true,
-   "reception_receive_clue": true,
    "reception_clue_exchange": true,
    "reception_send_clue": true,
    "filename": "schedules/base.json",
