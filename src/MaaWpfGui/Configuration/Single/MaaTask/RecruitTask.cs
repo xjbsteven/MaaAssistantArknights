@@ -78,6 +78,12 @@ public class RecruitTask : BaseTask, IJsonOnDeserialized
     public bool ForceRefresh { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether 优先保证最大招募数量。
+    /// 为凑满 MaxTimes，允许对未确认的低星（3/4）强制确认；5/6 与保留词条不强制。
+    /// </summary>
+    public bool ForceConfirmToMeetTimes { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether 自动确认3星
     /// </summary>
     public bool Level3Choose { get; set; } = true;

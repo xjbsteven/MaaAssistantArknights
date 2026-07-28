@@ -1826,6 +1826,7 @@ Cache files (such as maps, operator avatars, etc.) need to be regenerated after 
     <system:String x:Key="Level3UseShortTime2">Set 1:00 instead of 9:00 for 3★ Tags</system:String>
     <system:String x:Key="Level3UseShortTimeTip">Doesn't interfere with other ★ stars</system:String>
     <system:String x:Key="RecruitMaxTimes">Recruit max times</system:String>
+    <system:String x:Key="ForceConfirmToMeetTimes">Prioritize meeting max recruit times</system:String>
     <system:String x:Key="PreserveTags">Preserve selected tags</system:String>
     <system:String x:Key="AutoSelectLevel3">Auto confirm 3★</system:String>
     <system:String x:Key="AutoSelectLevel4">Auto confirm 4★</system:String>

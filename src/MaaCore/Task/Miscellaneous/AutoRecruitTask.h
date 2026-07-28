@@ -30,6 +30,7 @@ public:
     AutoRecruitTask& set_preserve_tags(std::vector<RecruitConfig::TagId> skip_tags) noexcept;
     AutoRecruitTask& set_set_time(bool set_time) noexcept;
     AutoRecruitTask& set_force_refresh(bool force_refrest) noexcept;
+    AutoRecruitTask& set_force_confirm_to_meet_times(bool force_confirm) noexcept;
     AutoRecruitTask& set_recruitment_time(std::unordered_map<int, int>) noexcept;
 
     AutoRecruitTask& set_penguin_enabled(bool enable, std::string penguin_id = std::string()) noexcept;
@@ -53,7 +54,7 @@ protected:
     };
 
     std::optional<Rect> try_get_start_button(const cv::Mat&);
-    recruit_result recruit_one(const Rect&);
+    recruit_result recruit_one(const Rect&, int remaining_slots);
     bool check_recruit_home_page();
     bool recruit_begin();
     bool check_timer(int);
@@ -163,7 +164,10 @@ protected:
                this->m_select_level.end();
     }
 
-    calc_task_result_type recruit_calc_task(slot_index = 0);
+    // Force-confirm unconfirmed low-star (3/4) only; never 5/6. Invalid when times==0.
+    bool should_force_confirm_low_level(int level, int remaining_slots) const;
+
+    calc_task_result_type recruit_calc_task(slot_index = 0, int remaining_slots = 0);
 
     std::vector<int> m_select_level;
     std::vector<int> m_confirm_level;
@@ -177,6 +181,7 @@ protected:
     bool m_has_refresh = true;
     bool m_set_time = true;
     bool m_force_refresh = true;
+    bool m_force_confirm_to_meet_times = false;
     std::unordered_map<int /*level*/, int /*minutes*/> m_desired_time_map;
 
     int m_slot_fail = 0;
