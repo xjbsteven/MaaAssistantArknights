@@ -348,27 +348,49 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 <br>
 `10000` - `Custom`: 自定义换班模式，读取用户配置，可参考 [基建排班协议](./base-scheduling-schema.md)。
 <br>
-`20000` - `Rotation`: 一键轮换模式，会跳过控制中枢、发电站、宿舍以及办公室，其余设施不进行换班但保留基本操作（如使用无人机、会客室逻辑）。  
+自定义配置中的单个计划仍可通过 `strategy: "facility_preset"` 启用设施预设换班（兼容旧配置）。
+<br>
+`20000` - `Rotation`: 队列轮换模式。默认 `rotation_style = "game"` 时，在游戏内执行一键队列轮换，并跳过控制中枢、发电站、宿舍以及办公室的换班，其余设施保留基本操作。
+<br>
+当 `rotation_style = "station_preset"` 时，改为在「进驻总览」按 `preset.rooms` 点击预设切换按钮。可通过任务参数内联 `preset` 对象（GUI 推荐），或提供 `filename` + `plan_index` 读取 JSON（API / 兼容）。该子模式兼容宿舍信赖、未进驻筛选、源石碎片自动补货、会客室相关设置及训练室继续专精。多班次请使用多个基建任务，每个任务对应一个班次。
+:::  
+::: field name="rotation_style" type="string" optional default="game"  
+队列轮换子类型。`mode = 20000` 时有效。
+<br>
+`game` - 游戏内一键队列轮换。
+<br>
+`station_preset` - 进驻总览设施点预设。读取内联 `preset` 或 `filename` 中的 `preset` 配置。  
+:::  
+::: field name="preset" type="object" optional  
+设施预设换班配置。`rotation_style = "station_preset"` 且未提供 `filename` 时必填。
+<br>
+`rooms`: 需要点击预设切换按钮的设施 ID 列表，如 `Control`、`Mfg1`、`Trade1`、`Office`。
+<br>
+`rest`: 是否在工作区设施切换完成后进入非工作区并点击「干员休整」，可选，默认 `true`。  
 :::  
 ::: field name="facility" type="array<string>" required  
 要换班的设施（有序）。不支持运行中设置。
 <br>
+`rotation_style = "station_preset"` 时该字段仅用于满足参数格式，不参与子任务编排。
+<br>
 设施名：`Mfg` | `Trade` | `Power` | `Control` | `Reception` | `Office` | `Dorm` | `Processing` | `Training`  
 :::  
-::: field name="drones" type="string" optional default="\_NotUse"  
-无人机用途。`mode = 10000` 时该字段无效。
+::: field name="drones" type="string | object" optional default="\_NotUse"  
+无人机用途。`mode = 10000` 时该字符串字段无效。
 <br>
-选项：`_NotUse` | `Money` | `SyntheticJade` | `CombatRecord` | `PureGold` | `OriginStone` | `Chip`  
+`rotation_style = "station_preset"` 时该字段为对象（与 Custom JSON plan 中 `drones` 结构相同）：`enable`、`room`（`trading` / `manufacture`）、`index`、`order`（`pre` / `post`）。未启用时可省略。
+<br>
+其他模式下为字符串，选项：`_NotUse` | `Money` | `SyntheticJade` | `CombatRecord` | `PureGold` | `OriginStone` | `Chip`  
 :::  
 ::: field name="threshold" type="number" optional default="0.3"  
 工作心情阈值，取值范围 [0, 1.0]。
 <br>
 `mode = 10000` 时该字段仅针对 "autofill" 有效。
 <br>
-`mode = 20000` 时该字段无效。  
+`mode = 20000` 或 `rotation_style = "station_preset"` 时该字段无效。  
 :::  
 ::: field name="replenish" type="boolean" optional default="false"  
-贸易站“源石碎片”是否自动补货。  
+制造站“源石碎片”是否自动补货。`rotation_style = "station_preset"` 时有效。  
 :::  
 ::: field name="dorm_notstationed_enabled" type="boolean" optional default="false"  
 是否启用宿舍“未进驻”选项。  
@@ -379,21 +401,32 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 ::: field name="reception_message_board" type="boolean" optional default="true"  
 是否领取会客室信息板信用。  
 :::  
+::: field name="reception_receive_clue" type="boolean" optional default="true"  
+是否接收会客室线索（好友线索与自有线索）。`rotation_style = "station_preset"` 或 Custom `strategy: facility_preset` 时有效。  
+:::  
 ::: field name="reception_clue_exchange" type="boolean" optional default="true"  
 是否进行线索交流。  
 :::  
 ::: field name="reception_send_clue" type="boolean" optional default="true"  
 是否赠送线索。  
 :::  
-::: field name="filename" type="string" required  
+::: field name="continue_training" type="boolean" optional default="false"  
+训练完成后是否继续尝试专精当前技能。`rotation_style = "station_preset"` 时有效。  
+:::  
+::: field name="filename" type="string" optional  
 自定义配置路径。不支持运行中设置。
 <br>
-<Badge type="warning" text="仅在 mode = 10000 时生效" />  
+<Badge type="warning" text="mode = 10000 时必填；rotation station_preset 可选（有内联 preset 时可省略）" />  
 :::  
-::: field name="plan_index" type="number" required  
+::: field name="plan_index" type="number" optional  
 使用配置中的方案序号。不支持运行中设置。
 <br>
-<Badge type="warning" text="仅在 mode = 10000 时生效" />  
+<Badge type="warning" text="mode = 10000 时生效；rotation station_preset 仅在提供 filename 时生效" />  
+:::  
+::: field name="auto_advance_plan_index" type="boolean" optional default="true"  
+手动选择班次（`plan_index >= 0`）时，任务完成后是否自动切换到下一班次（`(plan_index + 1) % plans.length`）。设为 `false` 则保持当前班次不变。
+<br>
+<Badge type="warning" text="mode = 10000 时生效" />  
 :::  
 ::::
 
@@ -411,6 +444,7 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
    "dorm_notstationed_enabled": false,
    "dorm_trust_enabled": true,
    "reception_message_board": true,
+   "reception_receive_clue": true,
    "reception_clue_exchange": true,
    "reception_send_clue": true,
    "filename": "schedules/base.json",
@@ -561,8 +595,6 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 `6` - 刷月度小队蚊子腿，除了针对模式的适配以外和模式 0 相同。
 <br>
 `7` - 刷深入调查蚊子腿，除了针对模式的适配以外和模式 0 相同。
-<br>
-`8` - 刷目标藏品（Mizuki / Sami）：统一选关策略刷商店与战后几选一；Mizuki 进店骰子刷新，Sami 进店免费刷新；打到失败或通关。
 :::  
 ::: field name="squad" type="string" optional default="指挥分队"  
 开局分队名。  
@@ -610,28 +642,7 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 是否只凹开局干员精二直升而忽视其他开局条件。仅在模式为 4 且 `start_with_elite_two` 为 true 时有效。  
 :::  
 ::: field name="refresh_trader_with_dice" type="boolean" optional default="false"  
-是否用骰子刷新商店购买特殊商品。仅适用于 Mizuki 主题，用于刷指路鳞（非 mode 8）。  
-:::  
-::: field name="refresh_trader_shopping_list" type="array<string>" optional default="[]"  
-刷藏品目标列表，顺序即优先级。仅在模式 `8` 且主题为 Mizuki 或 Sami 时有效且必填。
-<br>
-进诡意行商后按列表 OCR 购买；找不到则刷新（Mizuki 指路鳞，Sami 免费刷新）；刷新用尽仍没有则离店继续推进。
-<br>
-Sami 下若开启 `investment_enabled`，自定义购物结束后会进入投资，再离店；**不会**走常规货架购买（`TraderRandomShopping`）。Mizuki 刷藏品暂不投资。
-<br>
-战后藏品几选一：仍走原有 `GetDropSelect`（识别「选择」并 ClickSelf）；插件仅在点击前截图，若 OCR 命中列表则改写本次点击坐标，未命中则完全保持原点击。  
-<br>
-几选一截图目录：`debug/roguelike/collectibleSelect/`（与商店截图目录平行，不自动清理）。  
-<br>
-招募：指定开局干员（`core_char` / 助战）仍按原逻辑；其余有可招六星则招六星，否则招可招三星。  
-<br>
-不特搜商店，选关与模式 0 相同；打到失败或通关后才会开下一局。  
-<br>
-每次进店货架、每次刷新前/后会截图保存到用户目录下 `debug/roguelike/collectibleFarm/`（不自动清理），便于核对漏识别。  
-<br>
-若识别到目标但源石锭不足，会暂停任务并停留在购买界面，等待用户手动处理。  
-<br>
-投资源石锭仍由上方的 `investment_enabled` 控制。Sami 刷藏品可投资；Mizuki 刷藏品当前不投资。  
+是否用骰子刷新商店购买特殊商品。仅适用于 Mizuki 主题，用于刷指路鳞。  
 :::  
 ::: field name="first_floor_foldartal" type="string" optional  
 希望在第一层远见阶段得到的密文版。仅适用于 Sami 主题，不限模式；若成功凹到则停止任务。  
@@ -724,7 +735,6 @@ Sami 下若开启 `investment_enabled`，自定义购物结束后会进入投资
    "start_with_elite_two": false,
    "only_start_with_elite_two": false,
    "refresh_trader_with_dice": false,
-   "refresh_trader_shopping_list": [],
    "first_floor_foldartal": "",
    "start_foldartal_list": [],
    "collectible_mode_start_list": {
