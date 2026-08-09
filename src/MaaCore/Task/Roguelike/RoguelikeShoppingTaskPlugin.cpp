@@ -7,9 +7,8 @@
 #include "Config/TaskData.h"
 #include "Controller/Controller.h"
 #include "Task/ProcessTask.h"
+#include "Task/Roguelike/RoguelikeTraderGoodsHelper.h"
 #include "Utils/Logger.hpp"
-#include "Vision/Matcher.h"
-#include "Vision/OCRer.h"
 
 bool asst::RoguelikeShoppingTaskPlugin::verify(AsstMsg msg, const json::value& details) const
 {
@@ -25,6 +24,9 @@ bool asst::RoguelikeShoppingTaskPlugin::verify(AsstMsg msg, const json::value& d
     }
     else if (m_config->get_mode() == RoguelikeMode::Collectible) {
         return m_config->get_collectible_mode_shopping();
+    }
+    else if (m_config->get_mode() == RoguelikeMode::CollectibleFarm) {
+        return false; // 刷藏品只由 CustomShopping 插件按列表购买
     }
     return true;
 }
@@ -59,9 +61,8 @@ bool asst::RoguelikeShoppingTaskPlugin::buy_once()
     LogTraceFunction;
 
     auto image = ctrler()->get_image();
-    OCRer analyzer(image);
-    analyzer.set_task_info("RoguelikeTraderShoppingOcr");
-    if (!analyzer.analyze()) {
+    const auto result = RoguelikeTraderGoodsHelper::recognize_goods(image);
+    if (result.empty()) {
         return false;
     }
 
@@ -106,18 +107,6 @@ bool asst::RoguelikeShoppingTaskPlugin::buy_once()
                 total_wait_promotion += 1;
                 map_wait_promotion[role][rarity - 1] += 1;
             }
-        }
-    }
-
-    const auto& raw_result = analyzer.get_result();
-    std::vector<TextRect> result;
-    Matcher matcher_analyzer;
-    matcher_analyzer.set_image(image);
-    matcher_analyzer.set_task_info("RoguelikeTraderShopping");
-    for (auto& item : raw_result) {
-        matcher_analyzer.set_roi(item.rect.move({ -20, 130, 200, 80 }));
-        if (matcher_analyzer.analyze()) {
-            result.emplace_back(item);
         }
     }
 

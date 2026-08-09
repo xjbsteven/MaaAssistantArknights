@@ -30,6 +30,7 @@ enum class RoguelikeMode
     Collectible = 4, // 4 - 刷开局，以获得热水壶或者演讲稿开局或只凹直升，不期而遇采用保守策略
     Squad = 6,       // 6 - 月度小队，尽可能稳定地打更多层数，不期而遇采用激进策略
     Exploration = 7, // 7 - 深入调查，尽可能稳定地打更多层数，不期而遇采用激进策略
+    CollectibleFarm = 8, // 8 - 刷目标藏品：商店 OCR/刷新；战后几选一在原 GetDropSelect 上优先列表；打到失败或通关
 
     // ------------------ 萨米主题专用模式 ------------------
     CLP_PDS = 5, // 5 - 刷隐藏坍缩范式,以增加坍缩值为最优先目标
@@ -103,12 +104,17 @@ public:
         }
         return mode == RoguelikeMode::Exp || mode == RoguelikeMode::Investment || mode == RoguelikeMode::Collectible ||
                mode == RoguelikeMode::Squad || mode == RoguelikeMode::Exploration ||
+               (mode == RoguelikeMode::CollectibleFarm &&
+                (theme == RoguelikeTheme::Mizuki || theme == RoguelikeTheme::Sami)) ||
                (mode == RoguelikeMode::CLP_PDS && theme == RoguelikeTheme::Sami) ||
                (mode == RoguelikeMode::FastPass && theme == RoguelikeTheme::Sarkaz) ||
                (mode == RoguelikeMode::FindPlaytime && theme == RoguelikeTheme::JieGarden);
     }
 
     bool verify_and_load_params(const json::value& params);
+
+    /// 解析刷藏品列表：兼容英文/中文分号与换行（含「整段未拆开」的旧配置）
+    static std::vector<std::string> parse_refresh_trader_shopping_list(const json::value& params);
     void clear(); // 重置肉鸽局内数据
 
     // ================================= 通用参数 =================================

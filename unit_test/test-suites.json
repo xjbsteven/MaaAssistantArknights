@@ -14,6 +14,19 @@
         "src/MaaCore/Utils/Algorithm.hpp",
         "unit_test/MaaCore/AlgorithmTest.cpp"
       ]
+    },
+    {
+      "id": "trader-ocr-test",
+      "name": "Roguelike Trader OCR",
+      "buildTarget": "trader_ocr_test",
+      "ctestRegex": "^vision::",
+      "paths": [
+        "resource/tasks/Roguelike/base.json",
+        "src/MaaCore/Task/Roguelike/RoguelikeTraderGoodsHelper.cpp",
+        "src/MaaCore/Task/Roguelike/RoguelikeTraderGoodsHelper.h",
+        "tools/trader_ocr_test/RoguelikeTraderOcrTest.cpp",
+        "unit_test/fixtures/roguelike/trader/before_refresh_2_clover_fossil.png"
+      ]
     }
   ]
 }

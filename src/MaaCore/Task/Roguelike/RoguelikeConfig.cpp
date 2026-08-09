@@ -1,7 +1,10 @@
 #include "RoguelikeConfig.h"
 
+#include <algorithm>
+
 #include "Config/TaskData.h"
 #include "Utils/Logger.hpp"
+#include "Utils/StringMisc.hpp"
 
 bool asst::RoguelikeConfig::verify_and_load_params(const json::value& params)
 {
@@ -45,7 +48,19 @@ bool asst::RoguelikeConfig::verify_and_load_params(const json::value& params)
 
     // 设置层数选点策略，相关逻辑在 RoguelikeStrategyChangeTaskPlugin
     {
-        Task.set_task_base(m_theme + "@Roguelike@Stages", m_theme + "@Roguelike@Stages_default");
+        // 刷源石锭：Stages_investment；刷藏品：Stages_collectibleFarm；其余用 Stages_default
+        const std::string stages_task = m_theme + "@Roguelike@Stages";
+        const std::string investment_stages = m_theme + "@Roguelike@Stages_investment";
+        const std::string collectible_farm_stages = m_theme + "@Roguelike@Stages_collectibleFarm";
+        if (m_mode == RoguelikeMode::Investment && Task.get(investment_stages) != nullptr) {
+            Task.set_task_base(stages_task, investment_stages);
+        }
+        else if (m_mode == RoguelikeMode::CollectibleFarm && Task.get(collectible_farm_stages) != nullptr) {
+            Task.set_task_base(stages_task, collectible_farm_stages);
+        }
+        else {
+            Task.set_task_base(stages_task, m_theme + "@Roguelike@Stages_default");
+        }
         std::string strategy_task = m_theme + "@Roguelike@StrategyChange";
         std::string strategy_task_with_mode = strategy_task + "_mode" + std::to_string(static_cast<int>(mode));
         if (Task.get(strategy_task_with_mode) == nullptr) {
@@ -89,6 +104,13 @@ bool asst::RoguelikeConfig::verify_and_load_params(const json::value& params)
         }
     }
 
+    if (m_mode == RoguelikeMode::CollectibleFarm) {
+        if (parse_refresh_trader_shopping_list(params).empty()) {
+            Log.error(__FUNCTION__, "| CollectibleFarm mode requires non-empty refresh_trader_shopping_list");
+            return false;
+        }
+    }
+
     if (m_mode == RoguelikeMode::Investment) {
         bool investment_with_more_score = params.get("investment_with_more_score", false);
         if (params.contains("investment_enter_second_floor")) {
@@ -114,6 +136,48 @@ bool asst::RoguelikeConfig::verify_and_load_params(const json::value& params)
     }
 
     return true;
+}
+
+std::vector<std::string> asst::RoguelikeConfig::parse_refresh_trader_shopping_list(const json::value& params)
+{
+    std::vector<std::string> list;
+    const auto opt = params.find<json::array>("refresh_trader_shopping_list");
+    if (!opt) {
+        return list;
+    }
+
+    // 把中文分号、换行统一成 ';'，再按 ';' 切开（兼容旧 GUI 未拆开的整段配置）
+    constexpr std::string_view kCnSemicolon = "；"; // U+FF1B
+    for (const auto& name : *opt) {
+        std::string raw = name.as_string();
+        if (raw.empty()) {
+            continue;
+        }
+        utils::string_replace_all_in_place(raw, { { kCnSemicolon, ";" }, { "\r\n", ";" }, { "\n", ";" }, { "\r", ";" } });
+
+        size_t start = 0;
+        while (start <= raw.size()) {
+            const size_t pos = raw.find(';', start);
+            std::string part = raw.substr(start, pos == std::string::npos ? std::string::npos : pos - start);
+            // trim spaces
+            const auto first = part.find_first_not_of(" \t");
+            if (first == std::string::npos) {
+                part.clear();
+            }
+            else {
+                const auto last = part.find_last_not_of(" \t");
+                part = part.substr(first, last - first + 1);
+            }
+            if (!part.empty()) {
+                list.emplace_back(std::move(part));
+            }
+            if (pos == std::string::npos) {
+                break;
+            }
+            start = pos + 1;
+        }
+    }
+    return list;
 }
 
 void asst::RoguelikeConfig::clear()

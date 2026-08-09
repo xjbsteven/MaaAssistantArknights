@@ -1,6 +1,6 @@
 {
     "RoguelikeRouting-MoveRight": {
-        "doc": "生成地图时向左滑动",
+        "doc": "生成地图时向左滑动以露出右侧更远列",
         "algorithm": "JustReturn",
         "action": "Swipe",
         "specificRect": [1000, 360, 0, 0],
@@ -8,11 +8,27 @@
         "specialParams": [200, 1]
     },
     "RoguelikeRouting-MoveRightToPeek": {
-        "doc": "在地图初始位置向左滑动以检视前三列节点",
+        "doc": "在地图初始位置向左轻滑，露出第3列半露节点",
         "algorithm": "JustReturn",
         "action": "Swipe",
         "specificRect": [1000, 360, 0, 0],
         "rectMove": [800, 360, 0, 0],
+        "specialParams": [200, 1, 2, 0]
+    },
+    "RoguelikeRouting-MoveLeft": {
+        "doc": "与 MoveRight 对称，向右滑动回到左侧视野",
+        "algorithm": "JustReturn",
+        "action": "Swipe",
+        "specificRect": [400, 360, 0, 0],
+        "rectMove": [830, 360, 0, 0],
+        "specialParams": [200, 1]
+    },
+    "RoguelikeRouting-MoveLeftToUnpeek": {
+        "doc": "与 MoveRightToPeek 对称，收回轻滑",
+        "algorithm": "JustReturn",
+        "action": "Swipe",
+        "specificRect": [800, 360, 0, 0],
+        "rectMove": [1000, 360, 0, 0],
         "specialParams": [200, 1, 2, 0]
     },
     "RoguelikeRoutingAction": {
@@ -278,6 +294,129 @@
             "JieGarden@RoguelikeMapNode-DisasterGrey.png"
         ],
         "roi": [0, 60, 1280, 575],
+        "postDelay": 300
+    },
+    "Mizuki@RoguelikeRoutingConfig": {
+        "algorithm": "JustReturn",
+        "doc": [
+            "水月刷藏品寻店路由参数（节点略小于萨卡兹/界园 MapNode）",
+            "| specialParams 语义同 RoguelikeRoutingConfig"
+        ],
+        "specialParams": [321, 341, 586, 128, 47, 450, 32, 15, 7]
+    },
+    "Mizuki@Roguelike@Routing-CollectibleFarm": {
+        "Doc": "刷藏品：触发 RoguelikeRoutingTaskPlugin，在可选下一跳中优先通往商店的支路；action=DoNothing 避免点错节点",
+        "template": [
+            "Mizuki@RoguelikeMapNode-RogueTrader.png",
+            "Mizuki@RoguelikeMapNode-RogueTraderGrey.png",
+            "Mizuki@RoguelikeMapNode-Encounter.png",
+            "Mizuki@RoguelikeMapNode-EncounterGrey.png",
+            "Mizuki@RoguelikeMapNode-CombatOps.png",
+            "Mizuki@RoguelikeMapNode-CombatOpsGrey.png",
+            "Mizuki@RoguelikeMapNode-EmergencyOps.png",
+            "Mizuki@RoguelikeMapNode-EmergencyOpsGrey.png",
+            "Mizuki@RoguelikeMapNode-SafeHouse.png",
+            "Mizuki@RoguelikeMapNode-Boons.png",
+            "Mizuki@RoguelikeMapNode-BoonsGrey.png",
+            "Mizuki@RoguelikeMapNode-Recreation.png",
+            "Mizuki@RoguelikeMapNode-LostAndFound.png",
+            "Mizuki@RoguelikeMapNode-Scout.png",
+            "Mizuki@RoguelikeMapNode-RegionalCommissions.png",
+            "Mizuki@RoguelikeMapNode-DreadfulFoe.png",
+            "Mizuki@RoguelikeMapNode-DreadfulFoe-5.png"
+        ],
+        "action": "DoNothing",
+        "roi": [0, 53, 1280, 554],
+        "templThreshold": 0.7,
+        "next": ["RoguelikeRoutingAction"]
+    },
+    "Mizuki@RoguelikeRoutingAction-AfterClick": {
+        "Doc": "未知类型：只尝试通用进点，失败走 investment（禁止回到含 Routing 的 collectibleFarm，否则死循环）",
+        "algorithm": "JustReturn",
+        "next": [
+            "Mizuki@Roguelike@StageVerticalConfirm",
+            "Mizuki@Roguelike@StageEncounterEnter",
+            "Mizuki@Roguelike@StageCombatOpsEnter",
+            "Mizuki@Roguelike@StageEmergencyOpsEnter",
+            "Mizuki@Roguelike@StageSafeHouseEnter",
+            "Mizuki@Roguelike@StageDreadfulFoeEnter",
+            "Mizuki@Roguelike@StageDreadfulFoe-5Enter"
+        ],
+        "onErrorNext": ["Mizuki@Roguelike@Stages_investment"]
+    },
+    "Mizuki@RoguelikeRoutingAction-StageTraderEnter": {
+        "algorithm": "JustReturn",
+        "next": [
+            "Mizuki@Roguelike@StageVerticalConfirmTrader",
+            "Mizuki@Roguelike@StageTraderEnter"
+        ],
+        "onErrorNext": ["Mizuki@Roguelike@Stages_investment"]
+    },
+    "Mizuki@RoguelikeRoutingAction-StageEncounterEnter": {
+        "algorithm": "JustReturn",
+        "next": [
+            "Mizuki@Roguelike@StageVerticalConfirm",
+            "Mizuki@Roguelike@StageVerticalConfirmEncounter",
+            "Mizuki@Roguelike@StageEncounterEnter"
+        ],
+        "onErrorNext": ["Mizuki@Roguelike@Stages_investment"]
+    },
+    "Mizuki@RoguelikeRoutingAction-StageCombatOpsEnter": {
+        "algorithm": "JustReturn",
+        "next": [
+            "Mizuki@Roguelike@StageCombatOpsEnter",
+            "Mizuki@Roguelike@StageEmergencyOpsEnter"
+        ],
+        "onErrorNext": ["Mizuki@Roguelike@Stages_investment"]
+    },
+    "Mizuki@RoguelikeRoutingAction-StageEmergencyOpsEnter": {
+        "algorithm": "JustReturn",
+        "next": [
+            "Mizuki@Roguelike@StageEmergencyOpsEnter",
+            "Mizuki@Roguelike@StageCombatOpsEnter"
+        ],
+        "onErrorNext": ["Mizuki@Roguelike@Stages_investment"]
+    },
+    "Mizuki@RoguelikeRoutingAction-StageSafeHouseEnter": {
+        "algorithm": "JustReturn",
+        "next": [
+            "Mizuki@Roguelike@StageVerticalConfirmSafeHouse",
+            "Mizuki@Roguelike@StageSafeHouseEnter"
+        ],
+        "onErrorNext": ["Mizuki@Roguelike@Stages_investment"]
+    },
+    "Mizuki@RoguelikeRoutingAction-StageDreadfulFoeEnter": {
+        "algorithm": "JustReturn",
+        "next": [
+            "Mizuki@Roguelike@StageDreadfulFoeEnter",
+            "Mizuki@Roguelike@StageDreadfulFoe-5Enter",
+            "Mizuki@Roguelike@StageEmergencyOpsEnter",
+            "Mizuki@Roguelike@StageCombatOpsEnter"
+        ],
+        "onErrorNext": ["Mizuki@Roguelike@Stages_investment"]
+    },
+    "Mizuki@RoguelikeRoutingNodeAnalyze": {
+        "template": [
+            "Mizuki@RoguelikeMapNode-RogueTrader.png",
+            "Mizuki@RoguelikeMapNode-RogueTraderGrey.png",
+            "Mizuki@RoguelikeMapNode-Encounter.png",
+            "Mizuki@RoguelikeMapNode-EncounterGrey.png",
+            "Mizuki@RoguelikeMapNode-CombatOps.png",
+            "Mizuki@RoguelikeMapNode-CombatOpsGrey.png",
+            "Mizuki@RoguelikeMapNode-EmergencyOps.png",
+            "Mizuki@RoguelikeMapNode-EmergencyOpsGrey.png",
+            "Mizuki@RoguelikeMapNode-SafeHouse.png",
+            "Mizuki@RoguelikeMapNode-Boons.png",
+            "Mizuki@RoguelikeMapNode-BoonsGrey.png",
+            "Mizuki@RoguelikeMapNode-Recreation.png",
+            "Mizuki@RoguelikeMapNode-LostAndFound.png",
+            "Mizuki@RoguelikeMapNode-Scout.png",
+            "Mizuki@RoguelikeMapNode-RegionalCommissions.png",
+            "Mizuki@RoguelikeMapNode-DreadfulFoe.png",
+            "Mizuki@RoguelikeMapNode-DreadfulFoe-5.png"
+        ],
+        "roi": [0, 150, 1280, 457],
+        "templThreshold": 0.7,
         "postDelay": 300
     }
 }
