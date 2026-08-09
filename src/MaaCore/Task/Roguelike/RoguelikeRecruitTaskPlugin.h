@@ -42,6 +42,14 @@ private:
     bool is_oper_melee(const std::string& name);
     // 直接招募第一个干员
     bool lazy_recruit();
+    // 刷藏品简化招募：
+    // 1) 不预滑，先看当前页六星（按 recruitment.json 的 recruit_priority）
+    // 2) 当前页无六星再右滑找三星，出现即招（同样可按 priority）
+    bool recruit_first_six_or_three();
+    // 在当前页结果里按稀有度 + recruit_priority 选最优可招干员
+    const battle::roguelike::Recruitment* pick_best_on_page(
+        const std::vector<battle::roguelike::Recruitment>& chars,
+        int rarity) const;
     // 招募指定干员
     //
     // 输入参数:

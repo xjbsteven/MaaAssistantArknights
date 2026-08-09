@@ -248,8 +248,8 @@ bool asst::ResourceLoader::load(const std::filesystem::path& path)
         return false;
     }
 
-    // Map Config（仅 Sarkaz 和 JieGarden）
-    for (auto theme : { "Sarkaz", "JieGarden" }) {
+    // Map Config（Routing 建图用）
+    for (auto theme : { "Sarkaz", "JieGarden", "Mizuki" }) {
         if (!load_with_custom.template operator()<RoguelikeMapConfig>(
                 roguelike_path(theme, "map.json"_p),
                 "RoguelikeMapConfig")) {

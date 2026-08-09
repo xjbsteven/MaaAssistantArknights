@@ -1,5 +1,6 @@
 #include "RoguelikeTask.h"
 
+#include <algorithm>
 #include <utility>
 
 #include "Common/AsstBattleDef.h"
@@ -23,6 +24,8 @@
 #include "Task/Roguelike/RoguelikeRecruitTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeResetTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeSettlementTaskPlugin.h"
+#include "Task/Roguelike/RoguelikeCollectibleSelectTaskPlugin.h"
+#include "Task/Roguelike/RoguelikeCustomShoppingTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeShoppingTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeSkillSelectionTaskPlugin.h"
 #include "Task/Roguelike/RoguelikeStageEncounterTaskPlugin.h"
@@ -76,6 +79,11 @@ asst::RoguelikeTask::RoguelikeTask(const AsstCallback& callback, Assistant* inst
     m_debug_ptr = m_roguelike_task_ptr->register_plugin<RoguelikeDebugTaskPlugin>(m_config_ptr, m_control_ptr);
     m_custom_ptr = m_roguelike_task_ptr->register_plugin<RoguelikeCustomStartTaskPlugin>(m_config_ptr, m_control_ptr);
     m_roguelike_task_ptr->register_plugin<RoguelikeShoppingTaskPlugin>(m_config_ptr, m_control_ptr)->set_retry_times(0);
+    m_roguelike_task_ptr->register_plugin<RoguelikeCustomShoppingTaskPlugin>(m_config_ptr, m_control_ptr)
+        ->set_retry_times(0);
+    // 战后几选一：不改 GetDropSelect 的 action/next；仅在 SubTaskStart 时截图，必要时改写点击坐标
+    m_roguelike_task_ptr->register_plugin<RoguelikeCollectibleSelectTaskPlugin>(m_config_ptr, m_control_ptr)
+        ->set_retry_times(0);
 
     m_roguelike_task_ptr->register_plugin<RoguelikeBattleTaskPlugin>(m_config_ptr, m_control_ptr)
         ->set_retry_times(0)
@@ -282,9 +290,33 @@ bool asst::RoguelikeTask::set_params(const json::value& params)
     m_roguelike_task_ptr->set_times_limit(
         "StageTraderInvestSystem",
         params.get("investment_enabled", true) ? INT_MAX : 0);
+
+    const bool custom_trader_shopping = mode == RoguelikeMode::CollectibleFarm;
+    m_roguelike_task_ptr->set_times_limit("StageTraderCustomShopping", custom_trader_shopping ? INT_MAX : 0);
+    // 刷藏品时刷新由插件内执行；其他模式仍可用指路鳞开关
+    const bool refresh_with_dice = params.get("refresh_trader_with_dice", false);
     m_roguelike_task_ptr->set_times_limit(
         "StageTraderRefreshWithDice",
-        params.get("refresh_trader_with_dice", false) ? INT_MAX : 0);
+        (!custom_trader_shopping && refresh_with_dice) ? INT_MAX : 0);
+
+    // CollectibleFarm：
+    // - 水月：自定义购物后直接离店（投资仍禁用）
+    // - 萨米：自定义购物后可按 investment_enabled 投资；禁用常规购物（TraderRandomShopping）
+    // 禁止对 CustomShopping 做 set_task_base 换 base（会丢 template 并 FATAL 缺图）。
+    // 战后几选一由 CollectibleSelect 插件在原 GetDropSelect ClickSelf 前改写坐标（不改 action）。
+    if (custom_trader_shopping) {
+        if (theme == RoguelikeTheme::Mizuki) {
+            m_roguelike_task_ptr->set_times_limit("StageTraderInvestSystem", 0);
+            Log.info(__FUNCTION__, "| Mizuki CollectibleFarm: leave after CustomShopping (invest disabled)");
+        }
+        else if (theme == RoguelikeTheme::Sami) {
+            // 投资：沿用上面 investment_enabled 的 times_limit；只跳过常规货架购买
+            m_roguelike_task_ptr->set_times_limit("TraderRandomShopping", 0);
+            Log.info(
+                __FUNCTION__,
+                "| Sami CollectibleFarm: CustomShopping -> Invest(if enabled) -> Leave; no regular shopping");
+        }
+    }
 
     for (const auto& plugin : m_roguelike_task_ptr->get_plugins()) {
         if (const auto& p_ptr = std::dynamic_pointer_cast<AbstractRoguelikeTaskPlugin>(plugin); p_ptr != nullptr) {

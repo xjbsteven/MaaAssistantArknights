@@ -807,6 +807,8 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 `6` - 刷月度小队蚊子腿，除了针对模式的适配以外和模式 0 相同。
 <br>
 `7` - 刷深入调查蚊子腿，除了针对模式的适配以外和模式 0 相同。
+<br>
+`8` - 刷目标藏品（Mizuki / Sami）：统一选关策略刷商店与战后几选一；Mizuki 进店骰子刷新，Sami 进店免费刷新；打到失败或通关。
 :::  
 ::: field squad  
 @type string
@@ -901,7 +903,31 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 @type boolean
 @default false
 @optional
-是否用骰子刷新商店购买特殊商品。仅适用于 Mizuki 主题，用于刷指路鳞。  
+是否用骰子刷新商店购买特殊商品。仅适用于 Mizuki 主题，用于刷指路鳞（非 mode 8）。  
+:::  
+::: field refresh_trader_shopping_list  
+@type array<string>
+@default []
+@optional
+刷藏品目标列表，顺序即优先级。仅在模式 `8` 且主题为 Mizuki 或 Sami 时有效且必填。
+<br>
+进诡意行商后按列表 OCR 购买；找不到则刷新（Mizuki 指路鳞，Sami 免费刷新）；刷新用尽仍没有则离店继续推进。
+<br>
+Sami 下若开启 `investment_enabled`，自定义购物结束后会进入投资，再离店；**不会**走常规货架购买（`TraderRandomShopping`）。Mizuki 刷藏品暂不投资。
+<br>
+战后藏品几选一：仍走原有 `GetDropSelect`（识别「选择」并 ClickSelf）；插件仅在点击前截图，若 OCR 命中列表则改写本次点击坐标，未命中则完全保持原点击。  
+<br>
+几选一截图目录：`debug/roguelike/collectibleSelect/`（与商店截图目录平行，不自动清理）。  
+<br>
+招募：指定开局干员（`core_char` / 助战）仍按原逻辑；其余有可招六星则招六星，否则招可招三星。  
+<br>
+不特搜商店，选关与模式 0 相同；打到失败或通关后才会开下一局。  
+<br>
+每次进店货架、每次刷新前/后会截图保存到用户目录下 `debug/roguelike/collectibleFarm/`（不自动清理），便于核对漏识别。  
+<br>
+若识别到目标但源石锭不足，会暂停任务并停留在购买界面，等待用户手动处理。  
+<br>
+投资源石锭仍由上方的 `investment_enabled` 控制。Sami 刷藏品可投资；Mizuki 刷藏品当前不投资。  
 :::  
 ::: field first_floor_foldartal  
 @type string
@@ -1025,6 +1051,7 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
    "start_with_elite_two": false,
    "only_start_with_elite_two": false,
    "refresh_trader_with_dice": false,
+   "refresh_trader_shopping_list": [],
    "first_floor_foldartal": "",
    "start_foldartal_list": [],
    "collectible_mode_start_list": {

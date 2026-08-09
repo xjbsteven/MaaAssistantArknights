@@ -1,5 +1,8 @@
 #include "RoguelikeRecruitTaskPlugin.h"
 
+#include <algorithm>
+#include <limits>
+
 #include "Config/Miscellaneous/BattleDataConfig.h"
 #include "Config/TaskData.h"
 #include "Controller/Controller.h"
@@ -154,6 +157,11 @@ bool asst::RoguelikeRecruitTaskPlugin::_run()
                 return true;
             }
         }
+    }
+
+    // 刷藏品：指定开局干员已在上方处理；其余招募只招第一个可招六星，否则第一个可招三星
+    if (mode == RoguelikeMode::CollectibleFarm) {
+        return recruit_first_six_or_three();
     }
 
     bool team_full_without_rookie = m_config->status().team_full_without_rookie;
@@ -544,6 +552,113 @@ bool asst::RoguelikeRecruitTaskPlugin::lazy_recruit()
 
     ProcessTask(*this, { "RoguelikeRecruitLazyClick1" }).run();
     return true;
+}
+
+const asst::battle::roguelike::Recruitment* asst::RoguelikeRecruitTaskPlugin::pick_best_on_page(
+    const std::vector<battle::roguelike::Recruitment>& chars,
+    int rarity) const
+{
+    const battle::roguelike::Recruitment* best = nullptr;
+    int best_priority = std::numeric_limits<int>::min();
+    const auto& theme = m_config->get_theme();
+
+    for (const auto& oper : chars) {
+        if (BattleData.get_rarity(oper.name) != rarity) {
+            continue;
+        }
+        const int priority = RoguelikeRecruit.get_oper_info(theme, oper.name).recruit_priority;
+        if (best == nullptr || priority > best_priority) {
+            best = &oper;
+            best_priority = priority;
+        }
+    }
+    return best;
+}
+
+bool asst::RoguelikeRecruitTaskPlugin::recruit_first_six_or_three()
+{
+    LogTraceFunction;
+
+    // 刷藏品最短路径（与全表打分招募隔离，只影响 mode 8）：
+    // - 不做预往左滑：进职业列表后通常已在左侧；硬找六星再回找三星才是上次「有三星却点六星」的来源
+    // - 先只看当前页：有可招六星 → 按 recruit_priority 招最高的
+    // - 当前页没有六星 → 往右滑，一旦出现可招三星就招（同页按 priority）
+    const int swipe_times = Task.get("RoguelikeRecruitSwipeMaxTime")->max_times;
+    std::unordered_set<std::string> pre_oper_names;
+    bool has_been_same = false;
+
+    for (int i = 0; i != swipe_times; ++i) {
+        if (need_exit()) {
+            return false;
+        }
+
+        auto image = ctrler()->get_image();
+        RoguelikeRecruitImageAnalyzer analyzer(image);
+        if (!analyzer.analyze()) {
+            Log.trace(__FUNCTION__, "| Page", i, "recruit list analyse failed");
+            if (i == 0) {
+                // 偶发进界面偏右：仅失败时轻量回左一次再试
+                swipe_to_the_left_of_operlist(1);
+                continue;
+            }
+            break;
+        }
+
+        const auto& chars = analyzer.get_result();
+        std::unordered_set<std::string> oper_names;
+        int max_oper_x = 700;
+        for (const auto& oper : chars) {
+            oper_names.emplace(oper.name);
+            max_oper_x = std::max(max_oper_x, oper.rect.x);
+        }
+        Log.info(__FUNCTION__, "| Page", i, "opers:", oper_names);
+
+        // 当前页有可招六星：只在本页按优先级招，绝不往后翻找更「好」的六星
+        if (const auto* six = pick_best_on_page(chars, 6)) {
+            Log.info(
+                __FUNCTION__,
+                "page",
+                i,
+                "recruit 6★",
+                six->name,
+                "priority",
+                RoguelikeRecruit.get_oper_info(m_config->get_theme(), six->name).recruit_priority);
+            select_oper(*six);
+            return true;
+        }
+
+        // 本页无六星：有可招三星则直接招（第一页有三星就不必再滑）
+        if (const auto* three = pick_best_on_page(chars, 3)) {
+            Log.info(
+                __FUNCTION__,
+                "page",
+                i,
+                "no 6★, recruit 3★",
+                three->name,
+                "priority",
+                RoguelikeRecruit.get_oper_info(m_config->get_theme(), three->name).recruit_priority);
+            select_oper(*three);
+            return true;
+        }
+
+        if (pre_oper_names == oper_names) {
+            if (has_been_same) {
+                Log.trace(__FUNCTION__, "| Oper list not changed for three times, stop swiping");
+                break;
+            }
+            has_been_same = true;
+        }
+        else {
+            has_been_same = false;
+            pre_oper_names = std::move(oper_names);
+        }
+
+        slowly_swipe(false, max_oper_x - 200);
+        sleep(Task.get("RoguelikeCustom-HijackCoChar")->post_delay);
+    }
+
+    Log.warn(__FUNCTION__, "no recruitable 6★/3★, fallback to lazy_recruit");
+    return lazy_recruit();
 }
 
 bool asst::RoguelikeRecruitTaskPlugin::recruit_appointed_char(const std::string& char_name, bool is_rtl)

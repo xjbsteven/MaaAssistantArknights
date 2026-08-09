@@ -358,7 +358,7 @@
     "RoguelikeTraderShoppingOcr": {
         "algorithm": "OcrDetect",
         "text": [],
-        "roi": [406, 90, 825, 284],
+        "roi": [406, 90, 825, 350],
         "ocrReplace": [["指路.*", "指路鳞"]]
     },
     "RoguelikeTraderShoppingOver": {
@@ -1441,12 +1441,39 @@
         "next": [
             "Roguelike@StageVerticalConfirmTrader",
             "Roguelike@StageTraderEnter",
+            "Roguelike@StageTraderCustomShopping",
             "Roguelike@StageTraderInvestSystem",
             "Roguelike@StageTraderRefreshWithDice",
             "Roguelike@TraderRandomShopping",
             "Roguelike@StageTraderLeave",
             "Roguelike@StageTraderLeaveConfirm"
         ]
+    },
+    "Roguelike@StageTraderCustomShopping": {
+        "Doc": [
+            "刷藏品策略挂点，注册 RoguelikeCustomShoppingTaskPlugin（仅 mode8 times_limit>0）",
+            "使用离店按钮模板识别「已在商店内」；action=DoNothing，仅触发插件",
+            "mode8：插件结束后离店继续打；非 mode8（times=0）走 exceededNext 保持官方进店顺序",
+            "注意：勿对 theme@CustomShopping 做 set_task_base 换 base（会丢 template 并 FATAL 缺图）"
+        ],
+        "template": "Roguelike@StageTraderLeave.png",
+        "action": "DoNothing",
+        "roi": [1046, 443, 234, 204],
+        "templThreshold": 0.7,
+        "next": ["Roguelike@StageTraderLeave", "Roguelike@StageTraderLeaveConfirm"],
+        "exceededNext": [
+            "Roguelike@StageTraderInvestSystem",
+            "Roguelike@StageTraderRefreshWithDice",
+            "Roguelike@TraderRandomShopping",
+            "Roguelike@StageTraderLeave",
+            "Roguelike@StageTraderLeaveConfirm"
+        ]
+    },
+    "Roguelike@GetDropSelectCollectibleOcr": {
+        "Doc": "刷藏品战后几选一：OCR 选项名称（与 GetDropSelect「选择」按 x 对齐）；仅插件使用，不改原任务链",
+        "algorithm": "OcrDetect",
+        "text": [],
+        "roi": [0, 40, 1280, 360]
     },
     "Roguelike@StageTraderInvest-Arrow": {
         "templThreshold": 0.75,
@@ -1626,6 +1653,7 @@
         "baseTask": "Roguelike@StageVerticalConfirm",
         "next": [
             "Roguelike@StageTraderEnter",
+            "Roguelike@StageTraderCustomShopping",
             "Roguelike@StageTraderInvestSystem",
             "Roguelike@StageTraderRefreshWithDice",
             "Roguelike@TraderRandomShopping",
@@ -1790,6 +1818,9 @@
     "Roguelike@StrategyChange_mode7": {
         "baseTask": "Roguelike@StrategyChange_default"
     },
+    "Roguelike@StrategyChange_mode8": {
+        "baseTask": "Roguelike@StrategyChange_default"
+    },
     "Roguelike@TempRecruitFlag": {
         "roi": [587, 76, 100, 20],
         "templThreshold": 0.5
@@ -1814,6 +1845,7 @@
             "Roguelike@StageTraderLeave",
             "Roguelike@StageTraderLeaveConfirm"
         ],
+        "exceededNext": ["Roguelike@StageTraderLeave", "Roguelike@StageTraderLeaveConfirm"],
         "maskRange": [1, 255]
     },
     "Roguelike@TraderRandomShoppingCancel": {

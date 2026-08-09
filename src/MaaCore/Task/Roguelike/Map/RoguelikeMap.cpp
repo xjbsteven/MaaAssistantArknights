@@ -49,11 +49,12 @@ void asst::RoguelikeMap::set_curr_pos(const size_t& node_index)
 
 void asst::RoguelikeMap::update_node_costs()
 {
+    // 自后向前 DP：node.cost = f(node) + min(succ.cost)，用于整条可达路径规划
     for (const RoguelikeNodePtr& node : std::ranges::reverse_view(m_nodes)) {
         node->cost = m_cost_fun(node);
         if (!node->succs.empty()) {
             auto succ_costs = node->succs | std::views::transform([&](const size_t node_index) {
-                                  return m_cost_fun(m_nodes.at(node_index));
+                                  return m_nodes.at(node_index)->cost;
                               });
             node->cost += std::ranges::min(succ_costs);
         }

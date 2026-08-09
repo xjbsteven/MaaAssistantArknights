@@ -1,0 +1,55 @@
+{
+    "theme": "Mizuki",
+    "nodes": [
+        {
+            "type": "CombatOps",
+            "template": ["Mizuki@RoguelikeMapNode-CombatOps.png", "Mizuki@RoguelikeMapNode-CombatOpsGrey.png"]
+        },
+        {
+            "type": "EmergencyOps",
+            "template": [
+                "Mizuki@RoguelikeMapNode-EmergencyOps.png",
+                "Mizuki@RoguelikeMapNode-EmergencyOpsGrey.png"
+            ]
+        },
+        {
+            "type": "DreadfulFoe",
+            "template": [
+                "Mizuki@RoguelikeMapNode-DreadfulFoe.png",
+                "Mizuki@RoguelikeMapNode-DreadfulFoe-5.png"
+            ]
+        },
+        {
+            "type": "Encounter",
+            "template": ["Mizuki@RoguelikeMapNode-Encounter.png", "Mizuki@RoguelikeMapNode-EncounterGrey.png"]
+        },
+        {
+            "type": "Boons",
+            "template": ["Mizuki@RoguelikeMapNode-Boons.png", "Mizuki@RoguelikeMapNode-BoonsGrey.png"]
+        },
+        {
+            "type": "SafeHouse",
+            "template": ["Mizuki@RoguelikeMapNode-SafeHouse.png"]
+        },
+        {
+            "type": "Recreation",
+            "template": ["Mizuki@RoguelikeMapNode-Recreation.png"]
+        },
+        {
+            "type": "RogueTrader",
+            "template": ["Mizuki@RoguelikeMapNode-RogueTrader.png", "Mizuki@RoguelikeMapNode-RogueTraderGrey.png"]
+        },
+        {
+            "type": "RegionalCommissions",
+            "template": ["Mizuki@RoguelikeMapNode-RegionalCommissions.png"]
+        },
+        {
+            "type": "LostAndFound",
+            "template": ["Mizuki@RoguelikeMapNode-LostAndFound.png"]
+        },
+        {
+            "type": "Scout",
+            "template": ["Mizuki@RoguelikeMapNode-Scout.png"]
+        }
+    ]
+}
