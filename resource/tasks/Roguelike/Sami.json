@@ -824,6 +824,21 @@
         "next": ["Sami@Roguelike@StageTraderEnter", "Sami@Roguelike@Stages#next"]
     },
     "Sami@Roguelike@StageTraderEnter": {},
+    "Sami@Roguelike@StageTraderCustomShopping": {
+        "Doc": [
+            "萨米刷藏品：自定义购物后进入投资（由 investment_enabled 控制），再离店；",
+            "不经 TraderRandomShopping（mode8 下 times_limit=0）。",
+            "next 必须用 Sami@ 前缀：否则会走到无 next 的 Roguelike@Stages，",
+            "LeaveConfirm 后只剩 #self，卡在远见（FoldartalGainNextLevel）页。"
+        ],
+        "baseTask": "Roguelike@StageTraderCustomShopping",
+        "template": "Roguelike@StageTraderLeave.png",
+        "next": [
+            "Sami@Roguelike@StageTraderInvestSystem",
+            "Sami@Roguelike@StageTraderLeave",
+            "Sami@Roguelike@StageTraderLeaveConfirm"
+        ]
+    },
     "Sami@Roguelike@StageTraderLeaveConfirm": {
         "template": "Roguelike@StageTraderLeaveConfirm.png",
         "postDelay": 1000,
@@ -1215,6 +1230,65 @@
         ],
         "onErrorNext": ["Sami@Roguelike@ExitThenAbandon"]
     },
+    "Sami@Roguelike@Stages_collectibleFarm": {
+        "Doc": [
+            "mode8 刷目标藏品：基于 Stages_default；",
+            "商店优先（含纵向/六星变体），得偿所愿紧随商店；",
+            "进店由 CustomShopping 处理（萨米为免费刷新，非指路鳞）。"
+        ],
+        "algorithm": "JustReturn",
+        "next": [
+            "Sami@Roguelike@NextLevel",
+            "Sami@Roguelike@FoldartalGainNextLevel",
+            "Sami@Roguelike@StagesChaosZero",
+            "Sami@Roguelike@StageTrader",
+            "Sami@Roguelike@StageTraderAI6",
+            "Sami@Roguelike@StageVerticalTrader",
+            "Sami@Roguelike@StageVerticalTraderAI6",
+            "Sami@Roguelike@StageBoons",
+            "Sami@Roguelike@StageBoonsAI6",
+            "Sami@Roguelike@StageVerticalBoons",
+            "Sami@Roguelike@StageVerticalBoonsAI6",
+            "Sami@Roguelike@StageBoskyPassage",
+            "Sami@Roguelike@StageBoskyPassageAI6",
+            "Sami@Roguelike@StageVerticalBoskyPassage",
+            "Sami@Roguelike@StageVerticalBoskyPassageAI6",
+            "Sami@Roguelike@StageSafeHouse",
+            "Sami@Roguelike@StageSafeHouseAI6",
+            "Sami@Roguelike@StageVerticalSafeHouse",
+            "Sami@Roguelike@StageVerticalSafeHouseAI6",
+            "Sami@Roguelike@StageEmergencyTransportation",
+            "Sami@Roguelike@StageEmergencyTransportationAI6",
+            "Sami@Roguelike@StageVerticalEmergencyTransportation",
+            "Sami@Roguelike@StageVerticalEmergencyTransportationAI6",
+            "Sami@Roguelike@StageGambling",
+            "Sami@Roguelike@StageGamblingAI6",
+            "Sami@Roguelike@StageVerticalGambling",
+            "Sami@Roguelike@StageVerticalGamblingAI6",
+            "Sami@Roguelike@StageProphecy",
+            "Sami@Roguelike@StageProphecyAI6",
+            "Sami@Roguelike@StageVerticalProphecy",
+            "Sami@Roguelike@StageVerticalProphecyAI6",
+            "Sami@Roguelike@StageEncounter",
+            "Sami@Roguelike@StageEncounterAI6",
+            "Sami@Roguelike@StageVerticalEncounter",
+            "Sami@Roguelike@StageVerticalEncounterAI6",
+            "Sami@Roguelike@StageWindAndRain",
+            "Sami@Roguelike@StageWindAndRainAI6",
+            "Sami@Roguelike@StageVerticalWindAndRain",
+            "Sami@Roguelike@StageVerticalWindAndRainAI6",
+            "Sami@Roguelike@StageMysteriousPresage",
+            "Sami@Roguelike@StageFerociousPresage",
+            "Sami@Roguelike@StageCombatOps",
+            "Sami@Roguelike@StageCombatOpsAI6",
+            "Sami@Roguelike@StageEmergencyOps",
+            "Sami@Roguelike@StageEmergencyOpsAI6",
+            "Sami@Roguelike@StageDreadfulFoe",
+            "Sami@Roguelike@StageDreadfulFoe-5",
+            "Sami@Roguelike@Stages@(Sami@Roguelike@CloseCollectionClose)"
+        ],
+        "onErrorNext": ["Sami@Roguelike@ExitThenAbandon"]
+    },
     "Sami@Roguelike@Stages_pragmatic": {
         "Doc": "避紧急作战,3-4层策略",
         "algorithm": "JustReturn",
@@ -1344,6 +1418,20 @@
             ["无瑕花园", "_SKIP_"],
             ["远见之构", "_SKIP_"],
             ["深埋迷境", "_SKIP_"]
+        ]
+    },
+    "Sami@Roguelike@StrategyChange_mode8": {
+        "Doc": "刷目标藏品：所有层统一 Stages_collectibleFarm；进店走 CustomShopping（免费刷新）",
+        "text": ["_collectibleFarm"],
+        "ocrReplace": [
+            ["初霜湖泽", "_collectibleFarm"],
+            ["密静林地", "_collectibleFarm"],
+            [".*明冻土", "昧明冻土"],
+            ["昧明冻土", "_collectibleFarm"],
+            ["积冰岩.*", "_collectibleFarm"],
+            ["无瑕花园", "_collectibleFarm"],
+            ["远见之构", "_collectibleFarm"],
+            ["深埋迷境", "_collectibleFarm"]
         ]
     },
     "Sami@Roguelike@StrategyChange_mode6": {
