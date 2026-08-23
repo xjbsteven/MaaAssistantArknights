@@ -1111,6 +1111,15 @@
                                 </StackPanel>
                             </ScrollViewer>
 
+                            <!--  奇象巡展  -->
+                            <hc:TextBox
+                                Grid.Row="0"
+                                hc:InfoElement.Placeholder="{DynamicResource MiniGame@InteractiveExhibition@TargetsPlaceholder}"
+                                hc:TitleElement.Title="{DynamicResource MiniGame@InteractiveExhibition@Targets}"
+                                Style="{StaticResource TextBoxExtend}"
+                                Text="{Binding InteractiveExhibitionTargets, UpdateSourceTrigger=PropertyChanged}"
+                                Visibility="{c:Binding 'SelectedMiniGameItem.IsInteractiveExhibition'}" />
+
                             <!--  隐秘战线  -->
                             <Grid Grid.Row="0" Visibility="{c:Binding 'SelectedMiniGameItem.IsSecretFront'}">
                                 <Grid.RowDefinitions>

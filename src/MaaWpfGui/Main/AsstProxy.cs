@@ -1681,8 +1681,12 @@ public class AsstProxy
                             break;
 
                         case "CheckEncounter-Uncollected":
+                        case "CheckEncounter-Target":
                             {
-                                var title = LocalizationHelper.GetString("MiniGame@InteractiveExhibition@UncollectedNotificationTitle");
+                                var titleKey = taskName == "CheckEncounter-Target"
+                                    ? "MiniGame@InteractiveExhibition@TargetNotificationTitle"
+                                    : "MiniGame@InteractiveExhibition@UncollectedNotificationTitle";
+                                var title = LocalizationHelper.GetString(titleKey);
                                 var content = LocalizationHelper.GetString("MiniGame@InteractiveExhibition@UncollectedNotificationContent");
 
                                 Instances.TaskQueueViewModel.AddLog(content, UiLogColor.Warning, updateCardImage: true);
@@ -3084,11 +3088,20 @@ public class AsstProxy
     /// </summary>
     /// <param name="taskName">任务名（tasks.json 中的 key）</param>
     /// <returns>是否成功。</returns>
-    public bool AsstMiniGame(string taskName)
+    public bool AsstMiniGame(string taskName, IReadOnlyList<string>? interactiveExhibitionTargets = null)
     {
         var task = new AsstCustomTask() {
             CustomTasks = [taskName],
         };
+        if (interactiveExhibitionTargets is { Count: > 0 })
+        {
+            task.Params = JObject.FromObject(new {
+                interactive_exhibition = new {
+                    targets = interactiveExhibitionTargets,
+                },
+            });
+        }
+
         var (type, param) = task.Serialize();
         return AsstAppendTaskWithEncoding(TaskType.MiniGame, type, param) && AsstStart();
     }

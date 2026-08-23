@@ -1,6 +1,6 @@
 {
     "MiniGame@InteractiveExhibition@Begin": {
-        "doc": "奇象巡展（InteractiveExhibition）：类似宝可梦的探索玩法。在指定区域用摇杆来回走动，遇敌进入战斗前预览界面，OCR 判断「已收录/暂未收录」：已收录则按左上角退出继续循环；暂未收录则结束任务交给玩家手动战斗。",
+        "doc": "奇象巡展（InteractiveExhibition）：类似宝可梦的探索玩法。在指定区域用摇杆来回走动，遇敌进入战斗前预览界面。默认 OCR「已收录/暂未收录」：已收录则退出继续；暂未收录则结束任务交给玩家手动战斗。若 CustomTask 写入了指定名字，则改为 OCR 预览黄色名字，命中即停、未命中无论收录与否都退出继续。",
         "algorithm": "JustReturn",
         "next": ["MiniGame@InteractiveExhibition@Loop"]
     },
@@ -73,6 +73,23 @@
         "text": ["暂未收录"],
         "roi": [300, 500, 120, 45],
         "next": ["Stop"]
+    },
+    "MiniGame@InteractiveExhibition@CheckEncounter-Target": {
+        "doc": "指定对象：OCR 预览界面「发现奇象生物!」下方的黄色名字 [240,210,260,50]。text 由 CustomTask 按用户输入写入；命中→结束任务。",
+        "algorithm": "OcrDetect",
+        "action": "DoNothing",
+        "text": [],
+        "roi": [240, 210, 260, 50],
+        "next": ["Stop"]
+    },
+    "MiniGame@InteractiveExhibition@CheckEncounter-Any": {
+        "doc": "指定对象模式：不论已收录/暂未收录，都退出预览继续找。仅在 CustomTask 改写 Walk next 后才会被走到。",
+        "algorithm": "OcrDetect",
+        "action": "DoNothing",
+        "text": ["已收录", "暂未收录"],
+        "roi": [300, 500, 120, 45],
+        "postDelay": 1000,
+        "next": ["MiniGame@InteractiveExhibition@ExitBattle"]
     },
     "MiniGame@InteractiveExhibition@ExitBattle": {
         "doc": "已收录：按左上角退出 [50,50,10,10]，点一次后等待转场。随后优先处理「今日不再提醒」弹窗，再处理误点退出后的「是否离开展会」弹窗；若仍能看到「已收录」（退出按钮没点中/转场未完成），允许继续点，直到确实退出回到地图。",

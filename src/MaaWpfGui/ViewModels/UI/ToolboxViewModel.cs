@@ -2272,6 +2272,9 @@ public class ToolboxViewModel : Screen
         public bool IsSecretFront => Value == "MiniGame@SecretFront";
 
         public bool IsPixelPaint => Value is "MiniGame@PixelPaint" or "MiniGame@PixelPaint@Begin";
+
+        public bool IsInteractiveExhibition =>
+            Value.StartsWith("MiniGame@InteractiveExhibition", StringComparison.Ordinal);
     }
 
     public ObservableCollection<MiniGameCategoryItem> MiniGameCategoryItems { get; } = [];
@@ -2431,6 +2434,21 @@ public class ToolboxViewModel : Screen
     ];
 
     public string SecretFrontEvent { get; set => SetAndNotify(ref field, value); } = string.Empty;
+
+    public string InteractiveExhibitionTargets { get; set => SetAndNotify(ref field, value); } = string.Empty;
+
+    private static List<string> ParseInteractiveExhibitionTargets(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return [];
+        }
+
+        return [.. raw
+            .Split([',', '，', ';', '；', '\n', '\r', '\t', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(s => s.Length > 0)
+            .Distinct(StringComparer.Ordinal)];
+    }
 
     #region PixelPaint
 
@@ -2980,7 +2998,16 @@ public class ToolboxViewModel : Screen
         }
         else
         {
-            caught = Instances.AsstProxy.AsstMiniGame(GetMiniGameTask());
+            var targets = SelectedMiniGameItem?.IsInteractiveExhibition == true
+                ? ParseInteractiveExhibitionTargets(InteractiveExhibitionTargets)
+                : [];
+            caught = Instances.AsstProxy.AsstMiniGame(GetMiniGameTask(), targets);
+            if (caught && targets.Count > 0)
+            {
+                Instances.TaskQueueViewModel.AddLog(
+                    string.Format(LocalizationHelper.GetString("MiniGame@InteractiveExhibition@TargetStartLog"), string.Join(" / ", targets)),
+                    UiLogColor.Info);
+            }
         }
 
         if (!caught)
