@@ -516,7 +516,7 @@ const asst::battle::roguelike::Recruitment* asst::RoguelikeRecruitTaskPlugin::pi
     const auto& theme = m_config->get_theme();
 
     for (const auto& oper : chars) {
-        if (BattleData.get_rarity(oper.name) != rarity) {
+        if (BattleData.get_rarity(battle::Role::Unknown, oper.name) != rarity) {
             continue;
         }
         const int priority = RoguelikeRecruit.get_oper_info(theme, oper.name).recruit_priority;
