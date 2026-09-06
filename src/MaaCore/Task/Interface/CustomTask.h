@@ -19,6 +19,7 @@ public:
     bool parse_and_register_pixel_paint(const std::string& task_name, const json::value& params);
 
     bool parse_and_register_material_synthesis(const std::string& task_name);
+    bool apply_interactive_exhibition(const std::string& task_name, const json::value& params);
 
 private:
     std::shared_ptr<ProcessTask> m_custom_task_ptr = nullptr;

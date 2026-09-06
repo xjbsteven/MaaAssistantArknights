@@ -45,6 +45,9 @@ bool asst::CustomTask::set_params(const json::value& params)
         else if (parse_and_register_material_synthesis(task_name)) {
             Log.info("Parsed and registered MaterialSynthesis task: ", task_name);
         }
+        else if (apply_interactive_exhibition(task_name, params)) {
+            Log.info("Applied InteractiveExhibition params for", task_name);
+        }
 
         if (Task.get(resolved_task) == nullptr) {
             Log.error("set_params failed, task not found: ", resolved_task);
@@ -207,5 +210,75 @@ bool asst::CustomTask::parse_and_register_secretfront(const std::string& task_na
 
     resolved_task = "MiniGame@SecretFront@Begin";
 
+    return true;
+}
+
+bool asst::CustomTask::apply_interactive_exhibition(const std::string& task_name, const json::value& params)
+{
+    if (!task_name.starts_with("MiniGame@InteractiveExhibition")) {
+        return false;
+    }
+
+    constexpr auto kWalkRight = "MiniGame@InteractiveExhibition@WalkRight";
+    constexpr auto kWalkLeft = "MiniGame@InteractiveExhibition@WalkLeft";
+    constexpr auto kExitBattle = "MiniGame@InteractiveExhibition@ExitBattle";
+    constexpr auto kTarget = "MiniGame@InteractiveExhibition@CheckEncounter-Target";
+    constexpr auto kAny = "MiniGame@InteractiveExhibition@CheckEncounter-Any";
+    constexpr auto kCollected = "MiniGame@InteractiveExhibition@CheckEncounter-Collected";
+    constexpr auto kUncollected = "MiniGame@InteractiveExhibition@CheckEncounter-Uncollected";
+    constexpr auto kDontRemind = "MiniGame@InteractiveExhibition@DontRemindToday";
+    constexpr auto kLeave = "MiniGame@InteractiveExhibition@LeaveExhibition";
+    constexpr auto kLoop = "MiniGame@InteractiveExhibition@Loop";
+    constexpr auto kThenLeft = "MiniGame@InteractiveExhibition@CheckConnection-Then-WalkLeft";
+    constexpr auto kThenRight = "MiniGame@InteractiveExhibition@CheckConnection-Then-WalkRight";
+
+    std::vector<std::string> targets;
+    if (auto params_opt = params.find<json::object>("params")) {
+        if (auto ie_opt = params_opt->find<json::object>("interactive_exhibition")) {
+            if (auto arr_opt = ie_opt->find<json::array>("targets")) {
+                for (const auto& t : *arr_opt) {
+                    if (!t.is_string()) {
+                        continue;
+                    }
+                    std::string name = t.as_string();
+                    if (!name.empty()) {
+                        targets.emplace_back(std::move(name));
+                    }
+                }
+            }
+        }
+    }
+
+    auto walk_right = Task.get(kWalkRight);
+    auto walk_left = Task.get(kWalkLeft);
+    auto exit_battle = Task.get(kExitBattle);
+    auto target_task = Task.get<OcrTaskInfo>(kTarget);
+    if (!walk_right || !walk_left || !exit_battle || !target_task) {
+        Log.error(__FUNCTION__, "InteractiveExhibition tasks not found");
+        return false;
+    }
+
+    if (targets.empty()) {
+        target_task->text.clear();
+        walk_right->next = { kCollected, kUncollected, kThenLeft };
+        walk_left->next = { kCollected, kUncollected, kThenRight };
+        exit_battle->next = { kDontRemind, kLeave, kCollected, kLoop };
+        Log.info(__FUNCTION__, "uncollected-only mode");
+        return true;
+    }
+
+    target_task->text = targets;
+    walk_right->next = { kTarget, kAny, kThenLeft };
+    walk_left->next = { kTarget, kAny, kThenRight };
+    exit_battle->next = { kDontRemind, kLeave, kAny, kLoop };
+
+    std::string names;
+    for (size_t i = 0; i < targets.size(); ++i) {
+        if (i) {
+            names += ", ";
+        }
+        names += targets[i];
+    }
+    Log.info(__FUNCTION__, "target mode, names:", names);
     return true;
 }

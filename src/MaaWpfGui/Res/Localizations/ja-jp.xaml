@@ -1191,9 +1191,13 @@ C:\leidian\LDPlayer9
     <system:String x:Key="MiniGame@MaterialSynthesis@NavigationFailed">画面認識または操作に失敗しました</system:String>
     <system:String x:Key="MiniGame@MaterialSynthesis@UnknownFailure">不明なエラー</system:String>
     <system:String x:Key="MiniGame@InteractiveExhibition">奇象巡展-未収録の奇象を探す</system:String>
-    <system:String x:Key="MiniGame@InteractiveExhibitionTip" xml:space="preserve">選択したマップの高級エリアにある草原の右下からタスクを開始します。&#10;草原を行き来して未収録の生物を探し、見つかると自動的に停止します。&#10;生物に出会えるのは草原だけです。</system:String>
+    <system:String x:Key="MiniGame@InteractiveExhibitionTip" xml:space="preserve">選択したマップの高級エリアにある草原の右下からタスクを開始します。&#10;名前を空欄にすると未収録のみ探します。名前を入れると収録済みでも一致した時点で停止します。複数はカンマ区切り。&#10;生物に出会えるのは草原だけです。</system:String>
+    <system:String x:Key="MiniGame@InteractiveExhibition@Targets">指定する奇象</system:String>
+    <system:String x:Key="MiniGame@InteractiveExhibition@TargetsPlaceholder">空欄=未収録；例：大嘴捕食草</system:String>
+    <system:String x:Key="MiniGame@InteractiveExhibition@TargetStartLog">奇象巡展：指定名で探索（{0}）</system:String>
     <system:String x:Key="MiniGame@InteractiveExhibition@UncollectedNotificationTitle">奇象巡展：未収録の奇象を発見</system:String>
     <system:String x:Key="MiniGame@InteractiveExhibition@UncollectedNotificationContent">MAAは自動探索を停止しました。ゲームに戻って手動で戦闘を完了してください。</system:String>
+    <system:String x:Key="MiniGame@InteractiveExhibition@TargetNotificationTitle">奇象巡展：指定の奇象を発見</system:String>
     <system:String x:Key="MiniGame@PixelPaint">ピクセル画自動描画</system:String>
     <system:String x:Key="MiniGame@PixelPaintTip">ゲーム内の 24×24 ピクセル画編集ページに手動で入ってから開始してください。&#10;プレビューはドラッグ/ホイールで構図調整。デフォルトで白はスキップ。&#10;開始後はパラメータ固定。進捗は右のログ参照。</system:String>
     <system:String x:Key="MiniGame@PixelPaint@DropHint">画像をドロップ、画像/テキストを貼り付け、または下のボタンで選択</system:String>
