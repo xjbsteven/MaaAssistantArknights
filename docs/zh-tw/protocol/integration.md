@@ -555,7 +555,7 @@ Tag 等級（大於等於 3）對應的期望招募時限（單位：分鐘）�
 @type boolean
 @default false
 @optional
-是否在換班開始時使用菲亞梅塔為恢復目標恢復心情；關閉時換班將跳過宿舍準備步驟。僅 `mode = 0` 時生效。  
+是否在換班開始時使用菲亞梅塔。預設模式與 station-preset 輪換模式生效；普通輪換與 Custom 保持停用。
 :::  
 ::: field use_pinus_sylvestris  
 @type boolean

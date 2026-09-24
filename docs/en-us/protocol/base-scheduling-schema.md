@@ -137,6 +137,10 @@ Please note that JSON files do not support comments. The comments in this docume
 }
 ```
 
+## Station presets
+
+Set `mode = 20000` and `rotation_style = "station_preset"`, then provide `preset.rooms` and optional `preset.rest`. The same structure can be read through `filename` + `plan_index`; Custom plans may use `strategy: "facility_preset"` for compatibility.
+
 ## Example
 
 [243_layout_3_times_a_day](https://github.com/MaaAssistantArknights/MaaAssistantArknights/blob/master-v2/resource/custom_infrast/243_layout_3_times_a_day.json)

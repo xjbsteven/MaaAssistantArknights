@@ -137,6 +137,10 @@ JSON 파일은 주석을 지원하지 않으므로, 텍스트 내의 주석은 �
 }
 ```
 
+## 시설 프리셋
+
+`mode = 20000`, `rotation_style = "station_preset"`을 설정하고 `preset.rooms`와 선택적 `preset.rest`를 제공합니다. `filename` + `plan_index`로도 읽을 수 있으며 Custom 계획은 호환을 위해 `strategy: "facility_preset"`을 사용할 수 있습니다.
+
 ## 예시
 
 [243 극한 효율, 하루 3회 교대](https://github.com/MaaAssistantArknights/MaaAssistantArknights/blob/master-v2/resource/custom_infrast/243_layout_3_times_a_day.json)

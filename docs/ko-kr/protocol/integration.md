@@ -540,7 +540,7 @@ Rotation에서 `game`은 게임 내 로테이션을 사용하고 `station_preset
 @type boolean
 @default false
 @optional
-교대 시작 시 피아메타로 회복 대상의 컨디션을 회복할지 여부입니다. 비활성화 시 교대가 숙소 준비 단계를 건너뜁니다. `mode = 0`일 때만 유효합니다.  
+교대 시작 시 피아메타 사용 여부입니다. Default 및 station-preset Rotation에서 적용되며 일반 Rotation과 Custom은 비활성 상태를 유지합니다.
 :::  
 ::: field use_pinus_sylvestris  
 @type boolean

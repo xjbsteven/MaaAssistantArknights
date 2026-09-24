@@ -554,7 +554,7 @@ Options: `清流` | `可露希尔` | `但书` | `巫恋` | `龙舌兰` | `歌蕾
 @type boolean
 @default false
 @optional
-Whether to use Fiammetta to restore the target's morale at the start of the shift; when disabled, the shift change skips the dormitory preparation step. Only effective when `mode = 0`.  
+Whether to use Fiammetta at the start of the shift. Effective in Default mode and station-preset Rotation; ordinary Rotation and Custom remain disabled.
 :::  
 ::: field use_pinus_sylvestris  
 @type boolean

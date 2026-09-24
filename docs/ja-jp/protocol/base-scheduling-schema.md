@@ -147,6 +147,10 @@ JSONファイルはコメントをサポートしていません。テキスト�
 }
 ```
 
+## 施設プリセット
+
+`mode = 20000` と `rotation_style = "station_preset"` を設定し、`preset.rooms` と任意の `preset.rest` を指定します。`filename` + `plan_index` からも読み込め、Custom プランでは互換用に `strategy: "facility_preset"` を使用できます。
+
 ## サンプル
 
 [243 有効率が最も高い 一日三回](https://github.com/MaaAssistantArknights/MaaAssistantArknights/blob/master-v2/resource/custom_infrast/243_layout_3_times_a_day.json)

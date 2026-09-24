@@ -554,7 +554,7 @@ Rotation では `game` がゲーム内ローテーションを使い、`station_
 @type boolean
 @default false
 @optional
-交代開始時にフィアメッタで回復対象の体力を回復するかどうか。無効の場合、交代は宿舎準備ステップをスキップします。`mode = 0` の場合のみ有効です。  
+交代開始時にフィアメッタを使用するかどうか。Default と station-preset Rotation で有効、通常 Rotation と Custom では無効です。
 :::  
 ::: field use_pinus_sylvestris  
 @type boolean
