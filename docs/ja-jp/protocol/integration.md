@@ -350,6 +350,18 @@ Bilibili：`张三`、入力可能：`张三`、`张`、`三`
 @optional
 何回採用するか。計算のみの場合は 0 に設定できます。  
 :::  
+::: field minimum_recruit_times
+@type number
+@default 0
+@optional
+最低採用回数。`0 <= minimum_recruit_times <= times` に制限されます。通常の星3/4確認設定のみ上書きでき、タグ保護、星5/6、求人票、求人票予約数およびOCR安全保護が優先されます。
+:::
+::: field force_confirm_to_meet_times
+@type boolean
+@default false
+@optional
+非推奨の互換フィールド。新フィールドがない場合、`true` は `minimum_recruit_times = times` として扱われ、新フィールドが常に優先されます。
+:::
 ::: field set_time  
 @type boolean
 @default true
@@ -474,6 +486,17 @@ Bilibili：`张三`、入力可能：`张三`、`张`、`三`
 <br>
 `20000` - `Rotation`：ワンキー ローテーション モード。制御中枢、発電所、宿舎、および事務室をスキップします。他の施設はシフトを変更しませんが、基本的な操作は保持されます（ドローン使用、応接室ロジックなど）。  
 :::  
+::: field rotation_style
+@type string
+@default game
+@optional
+Rotation では `game` がゲーム内ローテーションを使い、`station_preset` がインライン `preset` または `filename` + `plan_index` を読み込みます。
+:::
+::: field preset
+@type object
+@optional
+施設プリセット設定。`rooms` は施設 ID、`rest` は宿舎プリセットを制御します。
+:::
 ::: field facility  
 @type array<string>
 @required
@@ -523,7 +546,7 @@ Bilibili：`张三`、入力可能：`张三`、`张`、`三`
 @type array<string>
 @default ["清流", "可露希尔", "但书"]
 @optional
-フィアメッタの回復対象リスト。交代開始時、リスト内で現在の体力が最も低い対象オペレーターがフィアメッタとともに寮へ配置されて体力を交換します。`mode = 0` かつ `fiammetta_recovery_enabled` が true の場合のみ有効です。
+フィアメッタの回復対象リスト。デフォルト、または `rotation_style = "station_preset"` のローテーションで回復が有効な場合に動作します。
 <br>
 オプション：`清流` | `可露希尔` | `但书` | `巫恋` | `龙舌兰` | `歌蕾蒂娅`（オプション外または重複するエントリは無視されます）  
 :::  

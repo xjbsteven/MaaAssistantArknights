@@ -139,6 +139,27 @@ icon: material-symbols:view-quilt-rounded
 
 ## 举例
 
+## 设施点预设
+
+设置 `mode = 20000`、`rotation_style = "station_preset"` 后，可在任务参数中直接提供 `preset`：
+
+```json
+{
+    "preset": {
+        "rooms": ["control", "manufacture_1", "trading_1"],
+        "rest": true
+    },
+    "drones": {
+        "enable": true,
+        "room": "manufacture",
+        "index": 1,
+        "order": "post"
+    }
+}
+```
+
+也可通过 `filename` 和 `plan_index` 读取 `plans[].preset`。Custom 计划可用 `strategy: "facility_preset"` 兼容同一结构。
+
 [243 极限效率，一天三换](https://github.com/MaaAssistantArknights/MaaAssistantArknights/blob/master-v2/resource/custom_infrast/243_layout_3_times_a_day.json)
 
 [153 极限效率，一天三换](https://github.com/MaaAssistantArknights/MaaAssistantArknights/blob/master-v2/resource/custom_infrast/153_layout_3_times_a_day.json)

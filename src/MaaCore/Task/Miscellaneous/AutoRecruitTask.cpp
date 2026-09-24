@@ -180,6 +180,12 @@ asst::AutoRecruitTask& asst::AutoRecruitTask::set_force_refresh(bool force_refre
     return *this;
 }
 
+asst::AutoRecruitTask& asst::AutoRecruitTask::set_minimum_recruit_times(int minimum_recruit_times) noexcept
+{
+    m_minimum_recruit_times = std::clamp(minimum_recruit_times, 0, (std::max)(m_max_times, 0));
+    return *this;
+}
+
 asst::AutoRecruitTask& asst::AutoRecruitTask::set_recruitment_time(std::unordered_map<int, int> time_map) noexcept
 {
     m_desired_time_map = std::move(time_map);
@@ -236,7 +242,19 @@ bool asst::AutoRecruitTask::_run()
     bool try_use_expedited = m_use_expedited;
 
     while (m_cur_times < m_max_times) {
-        auto start_rect = try_get_start_button(ctrler()->get_image());
+        const auto start_buttons = start_recruit_analyze(ctrler()->get_image());
+        int remaining_available_slots = 0;
+        std::optional<Rect> start_rect;
+        for (const auto& result : start_buttons) {
+            if (m_force_skipped.contains(slot_index_from_rect(result.rect))) {
+                continue;
+            }
+            ++remaining_available_slots;
+            if (!start_rect) {
+                start_rect = result.rect;
+                Log.info("Found slot index", slot_index_from_rect(result.rect), ".");
+            }
+        }
         if (start_rect) {
             if (need_exit()) {
                 return false;
@@ -244,7 +262,7 @@ bool asst::AutoRecruitTask::_run()
             if (m_slot_fail >= slot_retry_limit) {
                 return false;
             }
-            auto result = recruit_one(start_rect.value());
+            auto result = recruit_one(start_rect.value(), remaining_available_slots);
             // confirmed: real recruitment done, advance m_cur_times
             // skipped:   slot marked in m_force_skipped, try next slot without changing counters
             // failed:    recognition error / no permit / etc., bump m_slot_fail for retry limiting
@@ -296,6 +314,15 @@ bool asst::AutoRecruitTask::_run()
     return true;
 }
 
+bool asst::AutoRecruitTask::should_force_confirm_low_level(int level, int remaining_available_slots) const noexcept
+{
+    return recruit::should_force_confirm_for_minimum(
+        level,
+        m_cur_times,
+        m_minimum_recruit_times,
+        remaining_available_slots);
+}
+
 void asst::AutoRecruitTask::click_return_button()
 {
     ProcessTask(*this, { "RecruitContinue", "Return" }).run();
@@ -334,7 +361,8 @@ std::optional<asst::Rect> asst::AutoRecruitTask::try_get_start_button(const cv::
 ///              no recruit permit); slot is added to m_force_skipped so the loop tries the
 ///              next slot without changing any counters
 /// - failed:    recognition error, timer mismatch, confirm failure, or exit requested
-asst::AutoRecruitTask::recruit_result asst::AutoRecruitTask::recruit_one(const Rect& button)
+asst::AutoRecruitTask::recruit_result
+    asst::AutoRecruitTask::recruit_one(const Rect& button, int remaining_available_slots)
 {
     LogTraceFunction;
 
@@ -343,7 +371,7 @@ asst::AutoRecruitTask::recruit_result asst::AutoRecruitTask::recruit_one(const R
     ctrler()->click(button);
     sleep(delay);
 
-    auto calc_result = recruit_calc_task(slot_index_from_rect(button));
+    auto calc_result = recruit_calc_task(slot_index_from_rect(button), remaining_available_slots);
     sleep(delay);
 
     if (!calc_result.success) {
@@ -401,7 +429,8 @@ asst::AutoRecruitTask::recruit_result asst::AutoRecruitTask::recruit_one(const R
 }
 
 // set recruit timer and tags only
-asst::AutoRecruitTask::calc_task_result_type asst::AutoRecruitTask::recruit_calc_task(slot_index index)
+asst::AutoRecruitTask::calc_task_result_type
+    asst::AutoRecruitTask::recruit_calc_task(slot_index index, int remaining_available_slots)
 {
     LogTraceFunction;
 
@@ -692,18 +721,6 @@ asst::AutoRecruitTask::calc_task_result_type asst::AutoRecruitTask::recruit_calc
         }
 
         if (!is_calc_only_task()) {
-            if (!(has_skip_tag || has_special_tag)) {
-                // do not confirm 3 star, force skip
-                if (!is_confirm_level_valid(3) && final_combination.min_level == 3) {
-                    calc_task_result_type result(calc_task_result::force_skip);
-                    return result;
-                }
-            }
-            // do not confirm 4 star
-            if (!is_confirm_level_valid(4) && final_combination.min_level == 4) {
-                calc_task_result_type result(calc_task_result::force_skip);
-                return result;
-            }
             // "Automatically recruit 5/6 Star operators" is not checked.
             if (has_special_tag && !is_confirm_level_valid(final_combination.min_level)) {
                 calc_task_result_type result(calc_task_result::special_tag_skip);
@@ -737,6 +754,28 @@ asst::AutoRecruitTask::calc_task_result_type asst::AutoRecruitTask::recruit_calc
                         m_level3_recruitment_permit_reserve);
                     return calc_task_result_type(calc_task_result::force_skip);
                 }
+            }
+
+            const bool ordinary_low_level_skip =
+                (final_combination.min_level == 3 || final_combination.min_level == 4) &&
+                !is_confirm_level_valid(final_combination.min_level);
+            if (ordinary_low_level_skip) {
+                if (!should_force_confirm_low_level(final_combination.min_level, remaining_available_slots)) {
+                    return calc_task_result_type(calc_task_result::force_skip);
+                }
+
+                LogInfo << "Minimum recruit guarantee triggered: recruited=" << m_cur_times
+                        << "minimum=" << m_minimum_recruit_times << "remaining_slots=" << remaining_available_slots
+                        << "level=" << final_combination.min_level;
+                json::value cb_info = basic_info_with_what("RecruitMinimumGuaranteeTriggered");
+                cb_info["details"] = json::object {
+                    { "recruited", m_cur_times },
+                    { "minimum", m_minimum_recruit_times },
+                    { "remaining_slots", remaining_available_slots },
+                    { "level", final_combination.min_level },
+                    { "reason", "minimum_recruit_times" },
+                };
+                callback(AsstMsg::SubTaskExtraInfo, cb_info);
             }
         }
 

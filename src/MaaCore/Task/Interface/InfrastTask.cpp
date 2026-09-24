@@ -10,13 +10,69 @@
 #include "Task/Infrast/InfrastMfgTask.h"
 #include "Task/Infrast/InfrastOfficeTask.h"
 #include "Task/Infrast/InfrastPowerTask.h"
+#include "Task/Infrast/InfrastPresetTask.h"
 #include "Task/Infrast/InfrastProcessingTask.h"
+#include "Task/Infrast/InfrastProductionTask.h"
+#include "Task/Infrast/InfrastReceptionPresetTask.h"
 #include "Task/Infrast/InfrastReceptionTask.h"
 #include "Task/Infrast/InfrastTradeTask.h"
 #include "Task/Infrast/InfrastTrainingTask.h"
 #include "Task/Infrast/ReplenishOriginiumShardTaskPlugin.h"
 #include "Task/Miscellaneous/ScreenshotTaskPlugin.h"
 #include "Task/ProcessTask.h"
+
+namespace asst
+{
+static std::shared_ptr<InfrastProductionTask> make_facility_preset_drones_task(
+    const AsstCallback& callback,
+    Assistant* inst,
+    std::string_view task_chain,
+    const json::object& drones_json,
+    bool& valid)
+{
+    valid = true;
+    if (!drones_json.get("enable", true)) {
+        return nullptr;
+    }
+    const std::string room = drones_json.get("room", std::string());
+    std::shared_ptr<InfrastProductionTask> task;
+    if (room == "trading") {
+        task = std::make_shared<InfrastTradeTask>(callback, inst, task_chain);
+    }
+    else if (room == "manufacture") {
+        task = std::make_shared<InfrastMfgTask>(callback, inst, task_chain);
+    }
+    else {
+        LogError << "Invalid station_preset drones room:" << room;
+        valid = false;
+        return nullptr;
+    }
+    const int index = drones_json.get("index", 1);
+    if (index < 1 || index > 5) {
+        LogError << "Invalid station_preset drones index:" << index;
+        valid = false;
+        return nullptr;
+    }
+    infrast::CustomDronesConfig config;
+    config.index = index - 1;
+    config.order = infrast::CustomDronesConfig::Order::Pre;
+    task->set_custom_config(
+        infrast::CustomFacilityConfig(config.index + 1, infrast::CustomRoomConfig { .skip = true }));
+    task->set_custom_drones_config(std::move(config));
+    task->set_ignore_error(true);
+    return task;
+}
+
+static std::shared_ptr<InfrastMfgTask>
+    make_facility_preset_replenish_task(const AsstCallback& callback, Assistant* inst, std::string_view task_chain)
+{
+    auto task = std::make_shared<InfrastMfgTask>(callback, inst, task_chain);
+    task->set_ignore_error(true);
+    task->set_skip_shift(true);
+    task->register_plugin<ReplenishOriginiumShardTaskPlugin>()->set_enable(true);
+    return task;
+}
+} // namespace asst
 
 asst::InfrastTask::InfrastTask(const AsstCallback& callback, Assistant* inst) :
     InterfaceTask(callback, inst, TaskType),
@@ -29,12 +85,14 @@ asst::InfrastTask::InfrastTask(const AsstCallback& callback, Assistant* inst) :
     m_power_task_ptr(std::make_shared<InfrastPowerTask>(callback, inst, TaskType)),
     m_control_task_ptr(std::make_shared<InfrastControlTask>(callback, inst, TaskType)),
     m_reception_task_ptr(std::make_shared<InfrastReceptionTask>(callback, inst, TaskType)),
+    m_reception_preset_task_ptr(std::make_shared<InfrastReceptionPresetTask>(callback, inst, TaskType)),
     m_office_task_ptr(std::make_shared<InfrastOfficeTask>(callback, inst, TaskType)),
     m_processing_task_ptr(std::make_shared<InfrastProcessingTask>(callback, inst, TaskType)),
     m_training_task_ptr(std::make_shared<InfrastTrainingTask>(callback, inst, TaskType)),
     m_dorm_task_ptr(std::make_shared<InfrastDormTask>(callback, inst, TaskType)),
     m_dorm_task_ptr_post(std::make_shared<InfrastDormTask>(callback, inst, TaskType)),
-    m_assistant_change_task_ptr(std::make_shared<InfrastAssistantChangeTask>(callback, inst, TaskType))
+    m_assistant_change_task_ptr(std::make_shared<InfrastAssistantChangeTask>(callback, inst, TaskType)),
+    m_preset_task_ptr(std::make_shared<InfrastPresetTask>(callback, inst, TaskType))
 {
     LogTraceFunction;
 
@@ -42,6 +100,7 @@ asst::InfrastTask::InfrastTask(const AsstCallback& callback, Assistant* inst) :
     m_infrast_begin_task_ptr->register_plugin<ScreenshotTaskPlugin>();
     m_queue_rotation_task->set_tasks({ "InfrastEnterRotation" }).set_ignore_error(true);
     m_replenish_task_ptr = m_mfg_task_ptr->register_plugin<ReplenishOriginiumShardTaskPlugin>();
+    m_reception_preset_task_ptr->set_ignore_error(true);
     m_info_task_ptr->set_ignore_error(true);
     // InfrastInfoTask 内部按布局完整性最多尝试三轮，避免框架重试再次放大次数。
     m_info_task_ptr->set_retry_times(0);
@@ -70,15 +129,19 @@ bool asst::InfrastTask::set_params(const json::value& params)
     LogTraceFunction;
 
     auto mode = static_cast<Mode>(params.get("mode", 0));
-    // 仅常规模式支持菲亚梅塔配对；关闭时不把前置宿舍步骤纳入子任务序列。
-    const bool fiammetta_recovery_enabled = mode == Mode::Default && params.get("fiammetta_recovery_enabled", false);
+    const std::string rotation_style = params.get("rotation_style", std::string("game"));
+    m_rotation_station_preset = mode == Mode::Rotation && rotation_style == "station_preset";
+    m_station_preset_fiammetta_enabled = m_rotation_station_preset && params.get("fiammetta_recovery_enabled", false);
+    // Official behavior remains limited to Default; station_preset explicitly opts into the same implementation.
+    const bool fiammetta_recovery_enabled =
+        (mode == Mode::Default || m_rotation_station_preset) && params.get("fiammetta_recovery_enabled", false);
     const std::initializer_list<std::shared_ptr<InfrastProductionTask>> shift_tasks = { m_mfg_task_ptr,
                                                                                         m_trade_task_ptr,
                                                                                         m_reception_task_ptr };
 
     for (auto&& task : shift_tasks) {
         if (task) {
-            task->set_skip_shift(mode == Mode::Rotation);
+            task->set_skip_shift(mode == Mode::Rotation && !m_rotation_station_preset);
         }
     }
 
@@ -88,6 +151,9 @@ bool asst::InfrastTask::set_params(const json::value& params)
     };
     for (const auto& task : selection_tasks) {
         task->set_default_mode(mode == Mode::Default);
+    }
+    if (m_rotation_station_preset) {
+        m_dorm_task_ptr->set_default_mode(true);
     }
 
     if (!m_running) {
@@ -123,11 +189,13 @@ bool asst::InfrastTask::set_params(const json::value& params)
         m_subtasks.clear();
         append_infrast_begin();
 
-        if (mode == Mode::Rotation) {
+        if (mode == Mode::Rotation && !m_rotation_station_preset) {
             m_subtasks.emplace_back(m_queue_rotation_task);
         }
 
-        m_subtasks.emplace_back(m_info_task_ptr);
+        if (!m_rotation_station_preset) {
+            m_subtasks.emplace_back(m_info_task_ptr);
+        }
 
         auto add_facility = [&](const std::shared_ptr<InfrastAbstractTask>& task) {
             m_subtasks.emplace_back(task);
@@ -167,6 +235,9 @@ bool asst::InfrastTask::set_params(const json::value& params)
         std::vector<std::string> facilities;
         facilities.reserve(facility_opt->size());
         for (const auto& facility_json : facility_opt.value()) {
+            if (m_rotation_station_preset) {
+                break;
+            }
             if (!facility_json.is_string()) {
                 m_subtasks.clear();
                 append_infrast_begin();
@@ -199,8 +270,9 @@ bool asst::InfrastTask::set_params(const json::value& params)
 
     bool continue_training = params.get("continue_training", false);
     m_training_task_ptr->set_continue_training(continue_training);
+    m_facility_preset_training_enabled = continue_training;
 
-    if (mode != Mode::Custom) {
+    if (mode != Mode::Custom && !m_rotation_station_preset) {
         std::string drones = params.get("drones", "_NotUse");
         m_mfg_task_ptr->set_drones_usage_from_params(drones);
         m_trade_task_ptr->set_drones_usage_from_params(drones);
@@ -229,7 +301,7 @@ bool asst::InfrastTask::set_params(const json::value& params)
 
     const bool default_mode = mode == Mode::Default;
     const auto fiammetta_targets =
-        default_mode && fiammetta_recovery_enabled
+        (default_mode || m_rotation_station_preset) && fiammetta_recovery_enabled
             ? infrast::normalize_fiammetta_targets(params.get("fiammetta_targets", std::vector<std::string> {}))
             : std::vector<std::string> {};
     m_dorm_task_ptr->set_fiammetta_targets(fiammetta_targets);
@@ -243,29 +315,46 @@ bool asst::InfrastTask::set_params(const json::value& params)
         task->set_worldly_plight_enabled(worldly_plight_enabled);
         task->set_abyssal_hunter_enabled(abyssal_hunter_enabled);
     }
+    m_facility_preset_dorm_enabled = dorm_notstationed_enabled || dorm_trust_enabled;
 
-    bool reception_message_board = params.get("reception_message_board", true);
-    m_reception_task_ptr->set_receive_message_board(reception_message_board);
+    m_reception_message_board = params.get("reception_message_board", true);
+    m_reception_task_ptr->set_receive_message_board(m_reception_message_board);
 
-    bool reception_clue_exchange = params.get("reception_clue_exchange", true);
-    m_reception_task_ptr->set_enable_clue_exchange(reception_clue_exchange);
+    m_reception_receive_clue = params.get("reception_receive_clue", true);
 
-    bool reception_send_clue = params.get("reception_send_clue", true);
-    m_reception_task_ptr->set_send_clue(reception_send_clue);
+    m_reception_clue_exchange = params.get("reception_clue_exchange", true);
+    m_reception_task_ptr->set_enable_clue_exchange(m_reception_clue_exchange);
+
+    m_reception_send_clue = params.get("reception_send_clue", true);
+    m_reception_task_ptr->set_send_clue(m_reception_send_clue);
 
     bool replenish = params.get("replenish", false);
     m_replenish_task_ptr->set_enable(replenish);
+    m_facility_preset_replenish_enabled = replenish;
 
-    if (mode == Mode::Custom && !m_running) {
+    if ((mode == Mode::Custom || m_rotation_station_preset) && !m_running) {
+        if (m_rotation_station_preset) {
+            if (auto preset_opt = params.find<json::object>("preset")) {
+                json::object plan;
+                plan.emplace("preset", preset_opt.value());
+                if (auto drones_opt = params.find<json::object>("drones")) {
+                    plan.emplace("drones", drones_opt.value());
+                }
+                return apply_station_preset_plan(plan);
+            }
+        }
         auto filename_opt = params.find<std::string>("filename");
         if (!filename_opt) {
-            Log.error("filename is not set while custom mode is enabled");
+            Log.error("filename or inline preset is not set while custom or station_preset mode is enabled");
             return false;
         }
         std::string filename = filename_opt.value();
         int index = params.get("plan_index", 0);
 
         try {
+            if (m_rotation_station_preset) {
+                return parse_station_preset_config(utils::path(filename), index);
+            }
             return parse_and_set_custom_config(utils::path(filename), index);
         }
         catch (const json::exception& e) {
@@ -279,6 +368,102 @@ bool asst::InfrastTask::set_params(const json::value& params)
     }
 
     return true;
+}
+
+bool asst::InfrastTask::parse_station_preset_config(const std::filesystem::path& path, int index)
+{
+    if (!std::filesystem::exists(path) || !std::filesystem::is_regular_file(path)) {
+        Log.error("station_preset file does not exist:", path);
+        return false;
+    }
+    auto config = json::open(path, true, true);
+    if (!config) {
+        Log.error("failed to open station_preset file:", path);
+        return false;
+    }
+    auto& plans = config->at("plans").as_array();
+    if (index < 0 || index >= static_cast<int>(plans.size())) {
+        Log.error("station_preset plan index out of range", index);
+        return false;
+    }
+    return apply_station_preset_plan(plans.at(index).as_object());
+}
+
+bool asst::InfrastTask::apply_station_preset_plan(const json::object& plan)
+{
+    const auto preset = plan.find<json::object>("preset");
+    if (!preset) {
+        Log.error("station_preset requires preset object");
+        return false;
+    }
+    const auto rooms_json = preset->find<json::array>("rooms");
+    if (!rooms_json) {
+        Log.error("station_preset requires preset.rooms");
+        return false;
+    }
+    std::vector<std::string> rooms;
+    for (const auto& room : *rooms_json) {
+        if (!room.is_string()) {
+            Log.error("station_preset room must be a string");
+            return false;
+        }
+        rooms.emplace_back(room.as_string());
+    }
+
+    std::shared_ptr<InfrastProductionTask> drones_task;
+    std::string drones_order = "pre";
+    if (const auto drones = plan.find<json::object>("drones")) {
+        bool valid = true;
+        drones_task = make_facility_preset_drones_task(m_callback, m_inst, TaskType, *drones, valid);
+        if (!valid) {
+            return false;
+        }
+        drones_order = drones->get("order", "pre");
+    }
+
+    m_preset_task_ptr->set_rooms(std::move(rooms)).set_rest(preset->get("rest", true));
+    m_subtasks.clear();
+    m_subtasks.emplace_back(m_infrast_begin_task_ptr);
+
+    // Reuse the official DormPrepare implementation before switching presets.
+    if (m_station_preset_fiammetta_enabled) {
+        m_subtasks.emplace_back(m_dorm_task_ptr);
+        m_subtasks.emplace_back(m_infrast_begin_task_ptr);
+    }
+    if (drones_task && drones_order != "post") {
+        m_subtasks.emplace_back(drones_task);
+        m_subtasks.emplace_back(m_infrast_begin_task_ptr);
+    }
+    m_subtasks.emplace_back(m_preset_task_ptr);
+    if (drones_task && drones_order == "post") {
+        m_subtasks.emplace_back(m_infrast_begin_task_ptr);
+        m_subtasks.emplace_back(drones_task);
+    }
+    append_station_preset_auxiliary_subtasks();
+    return true;
+}
+
+void asst::InfrastTask::append_station_preset_auxiliary_subtasks()
+{
+    if (m_facility_preset_replenish_enabled) {
+        m_subtasks.emplace_back(m_infrast_begin_task_ptr);
+        m_subtasks.emplace_back(make_facility_preset_replenish_task(m_callback, m_inst, TaskType));
+    }
+    if (m_facility_preset_dorm_enabled && !m_station_preset_fiammetta_enabled) {
+        m_subtasks.emplace_back(m_infrast_begin_task_ptr);
+        m_subtasks.emplace_back(m_dorm_task_ptr);
+    }
+    if (m_reception_message_board || m_reception_receive_clue || m_reception_clue_exchange || m_reception_send_clue) {
+        m_reception_preset_task_ptr->set_receive_message_board(m_reception_message_board)
+            .set_receive_clue(m_reception_receive_clue)
+            .set_enable_clue_exchange(m_reception_clue_exchange)
+            .set_send_clue(m_reception_send_clue);
+        m_subtasks.emplace_back(m_reception_preset_task_ptr);
+    }
+    if (m_facility_preset_training_enabled) {
+        m_subtasks.emplace_back(m_infrast_begin_task_ptr);
+        m_subtasks.emplace_back(m_training_task_ptr);
+    }
 }
 
 bool asst::InfrastTask::parse_and_set_custom_config(const std::filesystem::path& path, int index)
@@ -304,6 +489,15 @@ bool asst::InfrastTask::parse_and_set_custom_config(const std::filesystem::path&
         return false;
     }
     auto& cur_plan = all_plans.at(index);
+
+    const std::string strategy = cur_plan.get("strategy", std::string());
+    if (strategy == "facility_preset") {
+        return apply_station_preset_plan(cur_plan.as_object());
+    }
+    if (!strategy.empty() && strategy != "operators") {
+        Log.error("Unknown custom infrast strategy", strategy);
+        return false;
+    }
 
     // 录入干员编组
     std::unordered_map<std::string, std::vector<std::string>> ori_operator_groups;

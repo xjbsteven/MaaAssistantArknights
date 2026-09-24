@@ -336,6 +336,18 @@ v6.8.0부터 폐기됨. 대신 `medicine_expire_days`를 사용하세요.
 @optional
 모집 횟수. 공모 계산만 할 경우 0으로 설정 가능  
 :::  
+::: field minimum_recruit_times
+@type number
+@default 0
+@optional
+최소 모집 횟수이며 `0 <= minimum_recruit_times <= times`로 제한됩니다. 일반 3/4성 확인 설정만 재정의하며, 태그 보존, 5/6성, 모집 허가증, 허가증 보유량 및 OCR 안전 규칙이 우선합니다.
+:::
+::: field force_confirm_to_meet_times
+@type boolean
+@default false
+@optional
+사용 중단된 호환 필드입니다. 새 필드가 없을 때 `true`는 `minimum_recruit_times = times`로 변환되며 새 필드가 항상 우선합니다.
+:::
 ::: field set_time  
 @type boolean
 @default true
@@ -460,6 +472,17 @@ Yituliu 전송 ID, 기본값 비어 있음. `report_to_yituliu`가 true일 때�
 <br>
 `20000` - `Rotation`: 원터치 로테이션 모드. 제어 센터, 발전소, 숙소, 사무실은 건너뛰고, 나머지 시설은 교대하지 않지만 기본 조작(드론 사용, 응접실 로직 등)은 유지  
 :::  
+::: field rotation_style
+@type string
+@default game
+@optional
+Rotation에서 `game`은 게임 내 로테이션을 사용하고 `station_preset`은 인라인 `preset` 또는 `filename` + `plan_index`를 읽습니다.
+:::
+::: field preset
+@type object
+@optional
+시설 프리셋 설정입니다. `rooms`는 시설 ID 목록이고 `rest`는 숙소 프리셋을 제어합니다.
+:::
 ::: field facility  
 @type array<string>
 @required
@@ -509,7 +532,7 @@ Yituliu 전송 ID, 기본값 비어 있음. `report_to_yituliu`가 true일 때�
 @type array<string>
 @default ["清流", "可露希尔", "但书"]
 @optional
-피아메타 회복 대상 목록. 교대 시작 시 목록에서 현재 컨디션이 가장 낮은 대상 오퍼레이터가 피아메타와 함께 숙소에 배치되어 컨디션을 교환합니다. `mode = 0`이면서 `fiammetta_recovery_enabled`가 true일 때만 유효합니다.
+피아메타 회복 대상 목록입니다. 기본 모드 또는 `rotation_style = "station_preset"`인 Rotation에서 회복이 활성화된 경우 적용됩니다.
 <br>
 옵션: `清流` | `可露希尔` | `但书` | `巫恋` | `龙舌兰` | `歌蕾蒂娅` (옵션 외 또는 중복 항목은 무시됨)  
 :::  

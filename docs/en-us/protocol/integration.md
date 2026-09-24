@@ -350,6 +350,18 @@ Select more tags.
 @optional
 Number of recruitments. Can be set to 0 for calculation only.  
 :::  
+::: field minimum_recruit_times
+@type number
+@default 0
+@optional
+Minimum number of recruitments to attempt, clamped to `0 <= minimum_recruit_times <= times`. It may override only ordinary 3/4-star confirmation settings; tag preservation, 5/6-star protection, permit availability, permit reserve, and permit-count OCR safety take priority.
+:::
+::: field force_confirm_to_meet_times
+@type boolean
+@default false
+@optional
+Deprecated compatibility field. When `minimum_recruit_times` is absent, `true` maps to `minimum_recruit_times = times`; the new field always takes precedence.
+:::
 ::: field set_time  
 @type boolean
 @default true
@@ -472,8 +484,19 @@ Shift mode. Editing in run-time is not supported.
 <br>
 `10000` - `Custom`: Custom shift mode, reads user configuration, see [Base Scheduling Schema](./base-scheduling-schema.md).
 <br>
-`20000` - `Rotation`: One-key rotation mode, skips control center, power station, dormitory and office, other facilities do not change shifts but retain basic operations (such as using drones, reception room logic).  
+`20000` - `Rotation`: Uses in-game rotation by default. Set `rotation_style = "station_preset"` to switch facility presets instead.
 :::  
+::: field rotation_style
+@type string
+@default game
+@optional
+For Rotation mode: `game` uses the official queue rotation; `station_preset` reads inline `preset` or `filename` + `plan_index`.
+:::
+::: field preset
+@type object
+@optional
+Station preset settings: `rooms` is the facility ID list and `rest` controls dorm presets.
+:::
 ::: field facility  
 @type array<string>
 @required
@@ -523,7 +546,7 @@ Whether to fill dormitory with operators not at max trust.
 @type array<string>
 @default ["清流", "可露希尔", "但书"]
 @optional
-Fiammetta recovery target list. At the start of a shift change, the target operator with the lowest morale in the list is placed in a dormitory together with Fiammetta to swap moods. Only effective when `mode = 0` and `fiammetta_recovery_enabled` is true.
+Fiammetta recovery target list. Effective in Default mode or Rotation with `rotation_style = "station_preset"` when recovery is enabled.
 <br>
 Options: `清流` | `可露希尔` | `但书` | `巫恋` | `龙舌兰` | `歌蕾蒂娅` (entries outside the options or duplicates are ignored)  
 :::  

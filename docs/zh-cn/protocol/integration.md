@@ -350,6 +350,19 @@ B服：`张三`，可输入 `张三`、`张`、`三`
 @optional
 招募多少次。若仅公招计算，可设置为 0。  
 :::  
+::: field minimum_recruit_times
+@type number
+@default 0
+@optional
+本轮尽量完成的最低实际招募数量，Core 会限制为 `0 <= minimum_recruit_times <= times`；`times = 0` 时不生效。
+仅当剩余可尝试槽位不足以继续跳过时，允许覆盖普通 3/4 星的自动确认设置。该保障不会覆盖 `preserve_tags`、5/6 星保护、无招聘许可、`level3_recruitment_permit_reserve` 或许可数量 OCR 失败保护。
+:::
+::: field force_confirm_to_meet_times
+@type boolean
+@default false
+@optional
+已废弃，仅用于兼容旧客户端。未提供 `minimum_recruit_times` 且本字段为 `true` 时，等价于 `minimum_recruit_times = times`；同时提供时新字段优先。
+:::
 ::: field set_time  
 @type boolean
 @default true
@@ -472,8 +485,19 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 <br>
 `10000` - `Custom`: 自定义换班模式，读取用户配置，可参考 [基建排班协议](./base-scheduling-schema.md)。
 <br>
-`20000` - `Rotation`: 一键轮换模式，会跳过控制中枢、发电站、宿舍以及办公室，其余设施不进行换班但保留基本操作（如使用无人机、会客室逻辑）。  
+`20000` - `Rotation`: 轮换模式。默认 `rotation_style = "game"` 时执行游戏内一键轮换；`rotation_style = "station_preset"` 时按设施点预设换班。
 :::  
+::: field rotation_style
+@type string
+@default game
+@optional
+仅 `mode = 20000` 生效。`game` 使用官方一键轮换；`station_preset` 读取内联 `preset`，或读取 `filename` + `plan_index` 指向的计划。
+:::
+::: field preset
+@type object
+@optional
+设施点预设配置。`rooms` 为需要点击预设切换的房间 ID 数组；`rest` 控制是否处理宿舍预设，默认 `true`。仅 `rotation_style = "station_preset"` 生效。
+:::
 ::: field facility  
 @type array<string>
 @required
@@ -484,10 +508,10 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 设施名：`Mfg` | `Trade` | `Power` | `Control` | `Reception` | `Office` | `Dorm` | `Processing` | `Training` | `AssistantChange`  
 :::  
 ::: field drones  
-@type string
+@type string | object
 @default \_NotUse
 @optional
-无人机用途。`mode = 10000` 时该字段无效。
+无人机用途。station_preset 下使用对象 `{ "enable": true, "room": "trading" | "manufacture", "index": 1, "order": "pre" | "post" }`。
 <br>
 选项：`_NotUse` | `Money` | `SyntheticJade` | `CombatRecord` | `PureGold` | `OriginStone` | `Chip`  
 :::  
@@ -523,7 +547,7 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 @type array<string>
 @default ["清流", "可露希尔", "但书"]
 @optional
-菲亚梅塔恢复目标名单，换班开始时会将名单中当前心情最低的干员与菲亚梅塔一同进驻宿舍互换心情。仅 `mode = 0` 且 `fiammetta_recovery_enabled` 为 true 时生效。
+菲亚梅塔恢复目标名单，换班开始时会将名单中当前心情最低的干员与菲亚梅塔一同进驻宿舍互换心情。仅 `mode = 0`，或 `mode = 20000` 且 `rotation_style = "station_preset"`，并且 `fiammetta_recovery_enabled` 为 true 时生效。
 <br>
 选项：`清流` | `可露希尔` | `但书` | `巫恋` | `龙舌兰` | `歌蕾蒂娅`（不在选项内或重复的条目会被忽略）  
 :::  
@@ -531,7 +555,7 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 @type boolean
 @default false
 @optional
-是否在换班开始时使用菲亚梅塔为恢复目标恢复心情；关闭时换班将跳过宿舍准备步骤。仅 `mode = 0` 时生效。  
+是否在换班开始时使用菲亚梅塔为恢复目标恢复心情；关闭时换班将跳过宿舍准备步骤。仅 `mode = 0` 或 station_preset 轮换时生效；普通 Rotation 与 Custom 不扩展。
 :::  
 ::: field use_pinus_sylvestris  
 @type boolean

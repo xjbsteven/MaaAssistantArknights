@@ -351,6 +351,18 @@ B 服：`張三`，可輸入 `張三`、`張`、`三`
 @optional
 招募總次數。若僅需公招計算，請設定為 0。  
 :::  
+::: field minimum_recruit_times
+@type number
+@default 0
+@optional
+本輪盡量完成的最低實際招募數量，限制為 `0 <= minimum_recruit_times <= times`。僅可覆蓋普通 3/4 星確認設定；保留標籤、5/6 星、許可證及許可證保留/OCR 安全規則優先。
+:::
+::: field force_confirm_to_meet_times
+@type boolean
+@default false
+@optional
+已棄用的相容欄位。未提供新欄位且為 `true` 時等同 `minimum_recruit_times = times`；新欄位優先。
+:::
 ::: field set_time  
 @type boolean
 @default true
@@ -475,6 +487,17 @@ Tag 等級（大於等於 3）對應的期望招募時限（單位：分鐘）�
 <br>
 `20000` - `Rotation`：一鍵輪換模式，會跳過控制中樞、發電站、宿舍以及辦公室；其餘設施不進行換班，但保留基本操作（如使用無人機、會客室邏輯）。  
 :::  
+::: field rotation_style
+@type string
+@default game
+@optional
+輪換模式下，`game` 使用遊戲內輪換；`station_preset` 讀取內聯 `preset` 或 `filename` + `plan_index`。
+:::
+::: field preset
+@type object
+@optional
+設施點預設；`rooms` 是設施 ID 清單，`rest` 控制宿舍預設。
+:::
 ::: field facility  
 @type array<string>
 @required
@@ -524,7 +547,7 @@ Tag 等級（大於等於 3）對應的期望招募時限（單位：分鐘）�
 @type array<string>
 @default ["清流", "可露希尔", "但书"]
 @optional
-菲亞梅塔恢復目標名單，換班開始時會將名單中當前心情最低的幹員與菲亞梅塔一同進駐宿舍互換心情。僅 `mode = 0` 且 `fiammetta_recovery_enabled` 為 true 時生效。
+菲亞梅塔恢復目標名單。僅預設模式，或 `rotation_style = "station_preset"` 的輪換模式且恢復已啟用時生效。
 <br>
 選項：`清流` | `可露希尔` | `但书` | `巫恋` | `龙舌兰` | `歌蕾蒂娅`（不在選項內或重複的條目會被忽略）  
 :::  
