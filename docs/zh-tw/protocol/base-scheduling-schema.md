@@ -139,7 +139,7 @@ icon: material-symbols:view-quilt-rounded
 
 ## 設施點預設
 
-設定 `mode = 20000` 與 `rotation_style = "station_preset"`，並提供 `preset.rooms` 和可選的 `preset.rest`。亦可由 `filename` + `plan_index` 讀取；Custom 計畫可用 `strategy: "facility_preset"` 相容此結構。
+設定 `mode = 20000` 與 `rotation_style = "station_preset"`，並提供 `preset.rooms` 和可選的 `preset.rest`。亦可由 `filename` + `plan_index` 讀取。
 
 ## 範例檔案
 

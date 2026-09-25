@@ -139,7 +139,7 @@ Please note that JSON files do not support comments. The comments in this docume
 
 ## Station presets
 
-Set `mode = 20000` and `rotation_style = "station_preset"`, then provide `preset.rooms` and optional `preset.rest`. The same structure can be read through `filename` + `plan_index`; Custom plans may use `strategy: "facility_preset"` for compatibility.
+Set `mode = 20000` and `rotation_style = "station_preset"`, then provide `preset.rooms` and optional `preset.rest`. The same structure can be read through `filename` + `plan_index`.
 
 ## Example
 

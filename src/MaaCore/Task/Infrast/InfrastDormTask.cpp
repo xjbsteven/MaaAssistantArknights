@@ -1,4 +1,5 @@
 #include "InfrastDormTask.h"
+#include "DormScanLogic.h"
 
 #include <algorithm>
 #include <array>
@@ -17,6 +18,7 @@
 #include "Vision/Infrast/InfrastOperImageAnalyzer.h"
 #include "Vision/Matcher.h"
 #include "Vision/RegionOCRer.h"
+#include "Vision/Hasher.h"
 
 namespace
 {
@@ -504,13 +506,14 @@ asst::InfrastDormTask::FiammettaSelectionResult asst::InfrastDormTask::try_selec
     // 先确认配对二人都在场，任一不在场直接结束；都在场才清空保存重进点选。
     m_fiammetta_checked = true;
     std::vector<infrast::Oper> target_opers;
-    const DetectResult target_detect = detect_fiammetta_target(target_opers);
+    std::string selected_target_name;
+    const DetectResult target_detect = detect_fiammetta_target(target_opers, selected_target_name);
     if (target_detect != DetectResult::Found) {
         return target_detect == DetectResult::Error ? FiammettaSelectionResult::Error
                                                     : FiammettaSelectionResult::NotFound;
     }
 
-    // 菲亚梅塔只在满心情时技能才有作用，按技能排序必然在第一页。
+    // Skill sorting is not a guarantee that Fiammetta is on the first page.
     if (!ProcessTask(*this, { "InfrastOperListTabSkillUnClicked" }).run()) {
         return FiammettaSelectionResult::Error;
     }
@@ -518,7 +521,7 @@ asst::InfrastDormTask::FiammettaSelectionResult asst::InfrastDormTask::try_selec
     const DetectResult fiammetta_detect = detect_full_mood_fiammetta(fiammetta_opers);
     if (fiammetta_detect != DetectResult::Found) {
         if (fiammetta_detect == DetectResult::NotFound) {
-            Log.warn("full-mood Fiammetta was not found on the first page");
+            LogWarn << "Full-mood Fiammetta was not found in the operator list";
         }
         if (!switch_to_low_mood_sort()) {
             return FiammettaSelectionResult::Error;
@@ -545,7 +548,7 @@ asst::InfrastDormTask::FiammettaSelectionResult asst::InfrastDormTask::try_selec
 
     // 点选顺序决定进驻顺序，菲亚梅塔必须在目标后一位。
     target_opers.clear();
-    if (detect_fiammetta_target(target_opers) != DetectResult::Found) {
+    if (detect_fiammetta_target(target_opers, selected_target_name, selected_target_name) != DetectResult::Found) {
         return FiammettaSelectionResult::Error;
     }
     ctrler()->click(target_opers.front().rect);
@@ -566,81 +569,127 @@ asst::InfrastDormTask::FiammettaSelectionResult asst::InfrastDormTask::try_selec
     return FiammettaSelectionResult::Selected;
 }
 
-asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_fiammetta_target(std::vector<infrast::Oper>& opers)
+asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_fiammetta_target(
+    std::vector<infrast::Oper>& opers,
+    std::string& chosen_name,
+    std::string_view desired_name)
 {
-    // 只识别当前第一页：恢复目标按低心情升序必然落在第一页。
-    InfrastOperImageAnalyzer analyzer(ctrler()->get_image());
-    analyzer.set_to_be_calced(InfrastOperImageAnalyzer::ToBeCalced::All);
-    analyzer.set_facility(facility_name());
-    if (!analyzer.analyze()) {
-        Log.error("fiammetta target analyze failed");
-        return DetectResult::Error;
-    }
-    opers = analyzer.get_result();
-
-    std::vector<infrast::DormSelectionCandidate> candidates;
-    candidates.reserve(opers.size());
-    for (const auto& oper : opers) {
-        infrast::DormSelectionCandidate candidate {
-            .operator_id = oper.operator_id,
-            .mood_ratio = oper.mood_ratio,
-            .selected = oper.selected,
-            // 菲亚梅塔目标可能正在其他设施工作，识别阶段仍应允许将其选中。
-            .available = true,
-        };
-        if (!candidate.selected && candidate.available && candidate.mood_ratio < m_mood_threshold) {
-            RegionOCRer name_analyzer(oper.name_img);
-            name_analyzer.set_replace(
-                Task.get<OcrTaskInfo>("CharsNameOcrReplace")->replace_map,
-                Task.get<OcrTaskInfo>("CharsNameOcrReplace")->replace_full);
-            if (auto name = name_analyzer.analyze()) {
-                candidate.name = name->text;
-            }
+    constexpr size_t MaxPages = 30;
+    swipe_to_the_left_of_operlist();
+    const int face_hash_threshold = Task.get("InfrastOperFace")->special_params[0];
+    std::vector<std::string> seen_faces;
+    infrast::FiammettaTargetChoice choice(m_fiammetta_targets, m_mood_threshold);
+    infrast::DormPageProgress progress;
+    for (size_t page = 0; page < MaxPages; ++page) {
+        if (need_exit()) {
+            return DetectResult::Error;
         }
-        candidates.emplace_back(std::move(candidate));
+        InfrastOperImageAnalyzer analyzer(ctrler()->get_image());
+        analyzer.set_to_be_calced(InfrastOperImageAnalyzer::ToBeCalced::All);
+        analyzer.set_facility(facility_name());
+        if (!analyzer.analyze()) {
+            LogError << "Fiammetta target page analysis failed:" << page;
+            return DetectResult::Error;
+        }
+        opers = analyzer.get_result();
+        size_t new_faces = 0;
+        for (size_t index = 0; index < opers.size(); ++index) {
+            const auto& oper = opers[index];
+            if (!oper.face_hash.empty() &&
+                std::ranges::none_of(seen_faces, [&](const std::string& hash) {
+                    return Hasher::hamming(hash, oper.face_hash) < face_hash_threshold;
+                })) {
+                seen_faces.emplace_back(oper.face_hash);
+                ++new_faces;
+            }
+            if (oper.selected || oper.mood_ratio >= choice.mood()) {
+                continue;
+            }
+            RegionOCRer name_analyzer(oper.name_img);
+            const auto& replace_task = Task.get<OcrTaskInfo>("CharsNameOcrReplace");
+            name_analyzer.set_replace(replace_task->replace_map, replace_task->replace_full);
+            const auto name = name_analyzer.analyze();
+            if (!name) {
+                continue;
+            }
+            if (!desired_name.empty() && name->text != desired_name) {
+                continue;
+            }
+            if (!choice.consider(name->text, oper.mood_ratio)) {
+                continue;
+            }
+            LogInfo << "Fiammetta target candidate:" << name->text << "mood:" << oper.mood_ratio << "page:" << page;
+            if (!desired_name.empty()) {
+                chosen_name = name->text;
+                std::swap(opers.front(), opers[index]);
+                return DetectResult::Found;
+            }
+            chosen_name = name->text;
+        }
+        LogInfo << "Fiammetta target scan page:" << page << "new faces:" << new_faces;
+        if (progress.reached_end(new_faces)) {
+            LogInfo << "Fiammetta target scan reached repeated pages:" << page;
+            break;
+        }
+        swipe_of_operlist();
     }
-
-    const auto target_index = infrast::find_fiammetta_target(candidates, m_fiammetta_targets, m_mood_threshold);
-    if (!target_index) {
-        return DetectResult::NotFound;
+    if (desired_name.empty() && !chosen_name.empty()) {
+        LogInfo << "Fiammetta target selected:" << chosen_name << "mood:" << choice.mood();
+        return DetectResult::Found;
     }
-    // 把命中的干员挪到首位，供调用方直接点选。
-    std::swap(opers.front(), opers[*target_index]);
-    return DetectResult::Found;
+    return DetectResult::NotFound;
 }
 
 asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_full_mood_fiammetta(std::vector<infrast::Oper>& opers)
 {
-    // 只识别当前第一页：满心情菲亚梅塔按技能排序必然落在第一页。
-    InfrastOperImageAnalyzer analyzer(ctrler()->get_image());
-    analyzer.set_to_be_calced(InfrastOperImageAnalyzer::ToBeCalced::All);
-    analyzer.set_facility(facility_name());
-    if (!analyzer.analyze()) {
-        Log.error("full-mood fiammetta analyze failed");
-        return DetectResult::Error;
-    }
-    opers = analyzer.get_result();
-
-    std::vector<infrast::DormSelectionCandidate> candidates;
-    candidates.reserve(opers.size());
-    for (const auto& oper : opers) {
-        candidates.emplace_back(
-            infrast::DormSelectionCandidate {
+    constexpr size_t MaxPages = 30;
+    swipe_to_the_left_of_operlist();
+    const int face_hash_threshold = Task.get("InfrastOperFace")->special_params[0];
+    std::vector<std::string> seen_faces;
+    infrast::DormPageProgress progress;
+    for (size_t page = 0; page < MaxPages; ++page) {
+        if (need_exit()) {
+            return DetectResult::Error;
+        }
+        InfrastOperImageAnalyzer analyzer(ctrler()->get_image());
+        analyzer.set_to_be_calced(InfrastOperImageAnalyzer::ToBeCalced::All);
+        analyzer.set_facility(facility_name());
+        if (!analyzer.analyze()) {
+            LogError << "Full-mood Fiammetta page analysis failed:" << page;
+            return DetectResult::Error;
+        }
+        opers = analyzer.get_result();
+        std::vector<infrast::DormSelectionCandidate> candidates;
+        candidates.reserve(opers.size());
+        size_t new_faces = 0;
+        for (const auto& oper : opers) {
+            if (!oper.face_hash.empty() &&
+                std::ranges::none_of(seen_faces, [&](const std::string& hash) {
+                    return Hasher::hamming(hash, oper.face_hash) < face_hash_threshold;
+                })) {
+                seen_faces.emplace_back(oper.face_hash);
+                ++new_faces;
+            }
+            candidates.emplace_back(infrast::DormSelectionCandidate {
                 .operator_id = oper.operator_id,
                 .mood_ratio = oper.mood_ratio,
                 .selected = oper.selected,
-                // 保持“全部”筛选，满心情菲亚梅塔也可能正在其他设施工作。
                 .available = true,
             });
+        }
+        if (const auto index = infrast::find_full_mood_fiammetta(candidates)) {
+            LogInfo << "Full-mood Fiammetta found on page:" << page;
+            std::swap(opers.front(), opers[*index]);
+            return DetectResult::Found;
+        }
+        LogInfo << "Full-mood Fiammetta scan page:" << page << "new faces:" << new_faces;
+        if (progress.reached_end(new_faces)) {
+            LogInfo << "Full-mood Fiammetta scan reached repeated pages:" << page;
+            break;
+        }
+        swipe_of_operlist();
     }
-
-    const auto fiammetta_index = infrast::find_full_mood_fiammetta(candidates);
-    if (!fiammetta_index) {
-        return DetectResult::NotFound;
-    }
-    // 把命中的干员挪到首位，供调用方直接点选。
-    std::swap(opers.front(), opers[*fiammetta_index]);
-    return DetectResult::Found;
+    return DetectResult::NotFound;
 }
 
 bool asst::InfrastDormTask::set_notstationed_filter(bool enabled)

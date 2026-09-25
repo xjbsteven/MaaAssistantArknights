@@ -149,7 +149,7 @@ JSONファイルはコメントをサポートしていません。テキスト�
 
 ## 施設プリセット
 
-`mode = 20000` と `rotation_style = "station_preset"` を設定し、`preset.rooms` と任意の `preset.rest` を指定します。`filename` + `plan_index` からも読み込め、Custom プランでは互換用に `strategy: "facility_preset"` を使用できます。
+`mode = 20000` と `rotation_style = "station_preset"` を設定し、`preset.rooms` と任意の `preset.rest` を指定します。`filename` + `plan_index` からも読み込めます。
 
 ## サンプル
 

@@ -45,3 +45,13 @@ target_link_libraries(maa-recruit-minimum-test PRIVATE Catch2::Catch2WithMain)
 target_include_directories(maa-recruit-minimum-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaCore)
 
 catch_discover_tests(maa-recruit-minimum-test TEST_PREFIX "recruit-minimum::")
+
+add_executable(maa-dorm-scan-test
+    MaaCore/DormScanLogicTest.cpp
+)
+
+target_compile_features(maa-dorm-scan-test PRIVATE cxx_std_20)
+target_link_libraries(maa-dorm-scan-test PRIVATE Catch2::Catch2WithMain)
+target_include_directories(maa-dorm-scan-test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/MaaCore)
+
+catch_discover_tests(maa-dorm-scan-test TEST_PREFIX "dorm-scan::")

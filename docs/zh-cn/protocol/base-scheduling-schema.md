@@ -158,7 +158,7 @@ icon: material-symbols:view-quilt-rounded
 }
 ```
 
-也可通过 `filename` 和 `plan_index` 读取 `plans[].preset`。Custom 计划可用 `strategy: "facility_preset"` 兼容同一结构。
+也可通过 `filename` 和 `plan_index` 读取 `plans[].preset`。
 
 [243 极限效率，一天三换](https://github.com/MaaAssistantArknights/MaaAssistantArknights/blob/master-v2/resource/custom_infrast/243_layout_3_times_a_day.json)
 

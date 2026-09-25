@@ -74,7 +74,10 @@ private:
     bool run_fiammetta_preparation();
     FiammettaSelectionResult try_select_fiammetta_pair();
     // 识别当前排序第一页的配对干员；命中者挪到 opers 首位供点选。
-    DetectResult detect_fiammetta_target(std::vector<infrast::Oper>& opers);
+    DetectResult detect_fiammetta_target(
+        std::vector<infrast::Oper>& opers,
+        std::string& chosen_name,
+        std::string_view desired_name = {});
     DetectResult detect_full_mood_fiammetta(std::vector<infrast::Oper>& opers);
     bool set_notstationed_filter(bool enabled);
     bool restore_list_sort_for_selection_phase(asst::infrast::CustomRoomConfig const& room_config);

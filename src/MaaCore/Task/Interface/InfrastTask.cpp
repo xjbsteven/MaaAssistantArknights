@@ -3,6 +3,7 @@
 #include "Utils/Logger.hpp"
 
 #include "Task/Infrast/DronesForShamareTaskPlugin.h"
+#include "Task/Infrast/DormScanLogic.h"
 #include "Task/Infrast/InfrastAssistantChangeTask.h"
 #include "Task/Infrast/InfrastControlTask.h"
 #include "Task/Infrast/InfrastDormTask.h"
@@ -426,7 +427,9 @@ bool asst::InfrastTask::apply_station_preset_plan(const json::object& plan)
     m_subtasks.emplace_back(m_infrast_begin_task_ptr);
 
     // Reuse the official DormPrepare implementation before switching presets.
-    if (m_station_preset_fiammetta_enabled) {
+    const auto dorm_stages =
+        infrast::station_preset_dorm_stages(m_station_preset_fiammetta_enabled, m_facility_preset_dorm_enabled);
+    if (dorm_stages.front() == infrast::StationPresetDormStage::Prepare) {
         m_subtasks.emplace_back(m_dorm_task_ptr);
         m_subtasks.emplace_back(m_infrast_begin_task_ptr);
     }
@@ -445,13 +448,15 @@ bool asst::InfrastTask::apply_station_preset_plan(const json::object& plan)
 
 void asst::InfrastTask::append_station_preset_auxiliary_subtasks()
 {
+    const auto dorm_stages =
+        infrast::station_preset_dorm_stages(m_station_preset_fiammetta_enabled, m_facility_preset_dorm_enabled);
+    if (dorm_stages.back() == infrast::StationPresetDormStage::Rearrange) {
+        m_subtasks.emplace_back(m_infrast_begin_task_ptr);
+        m_subtasks.emplace_back(m_dorm_task_ptr_post);
+    }
     if (m_facility_preset_replenish_enabled) {
         m_subtasks.emplace_back(m_infrast_begin_task_ptr);
         m_subtasks.emplace_back(make_facility_preset_replenish_task(m_callback, m_inst, TaskType));
-    }
-    if (m_facility_preset_dorm_enabled && !m_station_preset_fiammetta_enabled) {
-        m_subtasks.emplace_back(m_infrast_begin_task_ptr);
-        m_subtasks.emplace_back(m_dorm_task_ptr);
     }
     if (m_reception_message_board || m_reception_receive_clue || m_reception_clue_exchange || m_reception_send_clue) {
         m_reception_preset_task_ptr->set_receive_message_board(m_reception_message_board)
@@ -489,15 +494,6 @@ bool asst::InfrastTask::parse_and_set_custom_config(const std::filesystem::path&
         return false;
     }
     auto& cur_plan = all_plans.at(index);
-
-    const std::string strategy = cur_plan.get("strategy", std::string());
-    if (strategy == "facility_preset") {
-        return apply_station_preset_plan(cur_plan.as_object());
-    }
-    if (!strategy.empty() && strategy != "operators") {
-        Log.error("Unknown custom infrast strategy", strategy);
-        return false;
-    }
 
     // 录入干员编组
     std::unordered_map<std::string, std::vector<std::string>> ori_operator_groups;
