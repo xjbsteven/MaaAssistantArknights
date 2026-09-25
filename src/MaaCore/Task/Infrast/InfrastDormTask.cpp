@@ -15,10 +15,10 @@
 #include "Controller/Controller.h"
 #include "Task/ProcessTask.h"
 #include "Utils/Logger.hpp"
+#include "Vision/Hasher.h"
 #include "Vision/Infrast/InfrastOperImageAnalyzer.h"
 #include "Vision/Matcher.h"
 #include "Vision/RegionOCRer.h"
-#include "Vision/Hasher.h"
 
 namespace
 {
@@ -505,10 +505,14 @@ asst::InfrastDormTask::FiammettaSelectionResult asst::InfrastDormTask::try_selec
 {
     // 先确认配对二人都在场，任一不在场直接结束；都在场才清空保存重进点选。
     m_fiammetta_checked = true;
+    for (const auto& target : m_fiammetta_targets) {
+        LogInfo << "Configured Fiammetta target:" << target << "threshold:" << m_mood_threshold;
+    }
     std::vector<infrast::Oper> target_opers;
     std::string selected_target_name;
     const DetectResult target_detect = detect_fiammetta_target(target_opers, selected_target_name);
     if (target_detect != DetectResult::Found) {
+        LogInfo << "Skip Fiammetta recovery: no eligible target or target scan failed";
         return target_detect == DetectResult::Error ? FiammettaSelectionResult::Error
                                                     : FiammettaSelectionResult::NotFound;
     }
@@ -520,6 +524,7 @@ asst::InfrastDormTask::FiammettaSelectionResult asst::InfrastDormTask::try_selec
     std::vector<infrast::Oper> fiammetta_opers;
     const DetectResult fiammetta_detect = detect_full_mood_fiammetta(fiammetta_opers);
     if (fiammetta_detect != DetectResult::Found) {
+        LogInfo << "Skip Fiammetta recovery: full-mood Fiammetta unavailable or scan failed";
         if (fiammetta_detect == DetectResult::NotFound) {
             LogWarn << "Full-mood Fiammetta was not found in the operator list";
         }
@@ -595,8 +600,7 @@ asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_fiammetta_targ
         size_t new_faces = 0;
         for (size_t index = 0; index < opers.size(); ++index) {
             const auto& oper = opers[index];
-            if (!oper.face_hash.empty() &&
-                std::ranges::none_of(seen_faces, [&](const std::string& hash) {
+            if (!oper.face_hash.empty() && std::ranges::none_of(seen_faces, [&](const std::string& hash) {
                     return Hasher::hamming(hash, oper.face_hash) < face_hash_threshold;
                 })) {
                 seen_faces.emplace_back(oper.face_hash);
@@ -637,6 +641,7 @@ asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_fiammetta_targ
         LogInfo << "Fiammetta target selected:" << chosen_name << "mood:" << choice.mood();
         return DetectResult::Found;
     }
+    LogInfo << "Fiammetta target not found below mood threshold:" << m_mood_threshold;
     return DetectResult::NotFound;
 }
 
@@ -663,22 +668,22 @@ asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_full_mood_fiam
         candidates.reserve(opers.size());
         size_t new_faces = 0;
         for (const auto& oper : opers) {
-            if (!oper.face_hash.empty() &&
-                std::ranges::none_of(seen_faces, [&](const std::string& hash) {
+            if (!oper.face_hash.empty() && std::ranges::none_of(seen_faces, [&](const std::string& hash) {
                     return Hasher::hamming(hash, oper.face_hash) < face_hash_threshold;
                 })) {
                 seen_faces.emplace_back(oper.face_hash);
                 ++new_faces;
             }
-            candidates.emplace_back(infrast::DormSelectionCandidate {
-                .operator_id = oper.operator_id,
-                .mood_ratio = oper.mood_ratio,
-                .selected = oper.selected,
-                .available = true,
-            });
+            candidates.emplace_back(
+                infrast::DormSelectionCandidate {
+                    .operator_id = oper.operator_id,
+                    .mood_ratio = oper.mood_ratio,
+                    .selected = oper.selected,
+                    .available = true,
+                });
         }
         if (const auto index = infrast::find_full_mood_fiammetta(candidates)) {
-            LogInfo << "Full-mood Fiammetta found on page:" << page;
+            LogInfo << "Full-mood Fiammetta found on page:" << page << "mood:" << opers[*index].mood_ratio;
             std::swap(opers.front(), opers[*index]);
             return DetectResult::Found;
         }
@@ -689,6 +694,7 @@ asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_full_mood_fiam
         }
         swipe_of_operlist();
     }
+    LogInfo << "Full-mood Fiammetta not found after scanning operator list";
     return DetectResult::NotFound;
 }
 

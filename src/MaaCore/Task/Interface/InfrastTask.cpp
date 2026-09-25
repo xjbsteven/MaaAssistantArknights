@@ -2,8 +2,8 @@
 
 #include "Utils/Logger.hpp"
 
-#include "Task/Infrast/DronesForShamareTaskPlugin.h"
 #include "Task/Infrast/DormScanLogic.h"
+#include "Task/Infrast/DronesForShamareTaskPlugin.h"
 #include "Task/Infrast/InfrastAssistantChangeTask.h"
 #include "Task/Infrast/InfrastControlTask.h"
 #include "Task/Infrast/InfrastDormTask.h"
@@ -316,7 +316,8 @@ bool asst::InfrastTask::set_params(const json::value& params)
         task->set_worldly_plight_enabled(worldly_plight_enabled);
         task->set_abyssal_hunter_enabled(abyssal_hunter_enabled);
     }
-    m_facility_preset_dorm_enabled = dorm_notstationed_enabled || dorm_trust_enabled;
+    m_facility_preset_dorm_enabled =
+        infrast::station_preset_dorm_auxiliary_enabled(dorm_trust_enabled, dorm_notstationed_enabled);
 
     m_reception_message_board = params.get("reception_message_board", true);
     m_reception_task_ptr->set_receive_message_board(m_reception_message_board);

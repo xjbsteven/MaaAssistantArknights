@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace asst::infrast
@@ -20,8 +21,7 @@ public:
 
     bool consider(std::string_view name, double mood)
     {
-        if (mood >= m_lowest_mood ||
-            std::find(m_targets.begin(), m_targets.end(), name) == m_targets.end() ||
+        if (mood >= m_lowest_mood || std::find(m_targets.begin(), m_targets.end(), name) == m_targets.end() ||
             !m_seen.emplace(name).second) {
             return false;
         }
@@ -31,6 +31,7 @@ public:
     }
 
     const std::string& name() const noexcept { return m_name; }
+
     double mood() const noexcept { return m_lowest_mood; }
 
 private:
@@ -59,6 +60,11 @@ enum class StationPresetDormStage
     Preset,
     Rearrange,
 };
+
+inline bool station_preset_dorm_auxiliary_enabled(bool trust, bool notstationed) noexcept
+{
+    return trust || notstationed;
+}
 
 inline std::vector<StationPresetDormStage> station_preset_dorm_stages(bool fiammetta, bool dorm_auxiliary)
 {
