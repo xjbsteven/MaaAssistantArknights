@@ -585,6 +585,7 @@ asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_fiammetta_targ
     std::vector<std::string> seen_faces;
     infrast::FiammettaTargetChoice choice(m_fiammetta_targets, m_mood_threshold);
     infrast::DormPageProgress progress;
+    size_t pages_scanned = 0;
     for (size_t page = 0; page < MaxPages; ++page) {
         if (need_exit()) {
             return DetectResult::Error;
@@ -597,6 +598,7 @@ asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_fiammetta_targ
             return DetectResult::Error;
         }
         opers = analyzer.get_result();
+        pages_scanned = page + 1;
         size_t new_faces = 0;
         for (size_t index = 0; index < opers.size(); ++index) {
             const auto& oper = opers[index];
@@ -606,7 +608,7 @@ asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_fiammetta_targ
                 seen_faces.emplace_back(oper.face_hash);
                 ++new_faces;
             }
-            if (oper.selected || oper.mood_ratio >= choice.mood()) {
+            if (oper.selected) {
                 continue;
             }
             RegionOCRer name_analyzer(oper.name_img);
@@ -619,16 +621,32 @@ asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_fiammetta_targ
             if (!desired_name.empty() && name->text != desired_name) {
                 continue;
             }
-            if (!choice.consider(name->text, oper.mood_ratio)) {
+            const size_t recognized_before = choice.recognized_count();
+            const bool new_best = choice.consider(name->text, oper.mood_ratio);
+            if (choice.recognized_count() == recognized_before) {
                 continue;
             }
-            LogInfo << "Fiammetta target candidate:" << name->text << "mood:" << oper.mood_ratio << "page:" << page;
-            if (!desired_name.empty()) {
+            LogInfo << "Fiammetta configured target recognized:" << name->text << "mood:" << oper.mood_ratio
+                    << "page:" << page << "eligible:" << (oper.mood_ratio < m_mood_threshold);
+            if (new_best) {
                 chosen_name = name->text;
-                std::swap(opers.front(), opers[index]);
-                return DetectResult::Found;
+                if (!desired_name.empty()) {
+                    std::swap(opers.front(), opers[index]);
+                    return DetectResult::Found;
+                }
             }
-            chosen_name = name->text;
+            if (desired_name.empty() && choice.is_complete()) {
+                LogInfo << "Fiammetta target scan complete:"
+                        << (m_fiammetta_targets.size() == 1 ? "single configured target resolved"
+                                                            : "all configured targets resolved")
+                        << "page:" << page << "pages scanned:" << (page + 1);
+                if (!choice.name().empty()) {
+                    LogInfo << "Fiammetta target selected:" << choice.name() << "mood:" << choice.mood();
+                    return DetectResult::Found;
+                }
+                LogInfo << "Fiammetta target scan complete: no target below mood threshold:" << m_mood_threshold;
+                return DetectResult::NotFound;
+            }
         }
         LogInfo << "Fiammetta target scan page:" << page << "new faces:" << new_faces;
         if (progress.reached_end(new_faces)) {
@@ -638,10 +656,12 @@ asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_fiammetta_targ
         swipe_of_operlist();
     }
     if (desired_name.empty() && !chosen_name.empty()) {
-        LogInfo << "Fiammetta target selected:" << chosen_name << "mood:" << choice.mood();
+        LogInfo << "Fiammetta target selected:" << chosen_name << "mood:" << choice.mood()
+                << "pages scanned:" << pages_scanned;
         return DetectResult::Found;
     }
-    LogInfo << "Fiammetta target not found below mood threshold:" << m_mood_threshold;
+    LogInfo << "Fiammetta target not found below mood threshold:" << m_mood_threshold
+            << "pages scanned:" << pages_scanned;
     return DetectResult::NotFound;
 }
 

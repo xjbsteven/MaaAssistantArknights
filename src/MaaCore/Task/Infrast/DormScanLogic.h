@@ -21,8 +21,8 @@ public:
 
     bool consider(std::string_view name, double mood)
     {
-        if (mood >= m_lowest_mood || std::find(m_targets.begin(), m_targets.end(), name) == m_targets.end() ||
-            !m_seen.emplace(name).second) {
+        if (std::find(m_targets.begin(), m_targets.end(), name) == m_targets.end() ||
+            !m_recognized.emplace(name).second || mood >= m_lowest_mood) {
             return false;
         }
         m_name = name;
@@ -34,9 +34,13 @@ public:
 
     double mood() const noexcept { return m_lowest_mood; }
 
+    size_t recognized_count() const noexcept { return m_recognized.size(); }
+
+    bool is_complete() const noexcept { return m_recognized.size() == m_targets.size(); }
+
 private:
     std::vector<std::string> m_targets;
-    std::unordered_set<std::string> m_seen;
+    std::unordered_set<std::string> m_recognized;
     std::string m_name;
     double m_lowest_mood = 0;
 };
