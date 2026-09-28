@@ -58,6 +58,11 @@ private:
     size_t m_stalled = 0;
 };
 
+inline bool fiammetta_target_needs_relocation(size_t configured_target_count) noexcept
+{
+    return configured_target_count > 1;
+}
+
 enum class StationPresetDormStage
 {
     Prepare,

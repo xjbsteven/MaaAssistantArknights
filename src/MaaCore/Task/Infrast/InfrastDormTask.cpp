@@ -174,10 +174,9 @@ bool asst::InfrastDormTask::_run()
 
         // 每间宿舍都复查排序状态：用户可能手动切到了其他排序（工作状态/信赖）
         // 就开始任务，或上一间宿舍因卡顿退出主界面后重新进入导致状态丢失。
-        // 常规前置阶段还必须固定为低心情优先，否则即使只识别第一页，也可能
-        // 读到高心情一页。先切到其他排序再切回心情可以确定排序方向，全程不滑页。
-        const bool sort_succeeded =
-            m_prepare_phase && m_default_mode && !m_is_custom ? switch_to_low_mood_sort() : switch_to_mood_sort();
+        // 前置菲亚梅塔流程先清空宿舍，重进后才需要低心情排序。
+        const bool prepare_fiammetta = m_prepare_phase && m_default_mode && !m_is_custom;
+        const bool sort_succeeded = prepare_fiammetta || switch_to_mood_sort();
         if (!sort_succeeded) {
             return false;
         }
@@ -488,14 +487,22 @@ bool asst::InfrastDormTask::should_select_dorm_managers() const noexcept
 
 bool asst::InfrastDormTask::run_fiammetta_preparation()
 {
-    const FiammettaSelectionResult selection_result = m_fiammetta_checked || m_fiammetta_targets.empty()
-                                                          ? FiammettaSelectionResult::NotFound
-                                                          : try_select_fiammetta_pair();
+    if (m_fiammetta_targets.empty()) {
+        if (!click_confirm_button()) {
+            return false;
+        }
+        click_return_button();
+        return true;
+    }
+    const FiammettaSelectionResult selection_result =
+        m_fiammetta_checked ? FiammettaSelectionResult::NotFound : try_select_fiammetta_pair();
     if (selection_result == FiammettaSelectionResult::Error) {
         return false;
     }
-    if (!click_confirm_button()) {
-        return false;
+    if (selection_result == FiammettaSelectionResult::Selected) {
+        if (!click_confirm_button()) {
+            return false;
+        }
     }
     click_return_button();
     return true;
@@ -503,43 +510,9 @@ bool asst::InfrastDormTask::run_fiammetta_preparation()
 
 asst::InfrastDormTask::FiammettaSelectionResult asst::InfrastDormTask::try_select_fiammetta_pair()
 {
-    // 先确认配对二人都在场，任一不在场直接结束；都在场才清空保存重进点选。
     m_fiammetta_checked = true;
-    for (const auto& target : m_fiammetta_targets) {
-        LogInfo << "Configured Fiammetta target:" << target << "threshold:" << m_mood_threshold;
-    }
-    std::vector<infrast::Oper> target_opers;
-    std::string selected_target_name;
-    const DetectResult target_detect = detect_fiammetta_target(target_opers, selected_target_name);
-    if (target_detect != DetectResult::Found) {
-        LogInfo << "Skip Fiammetta recovery: no eligible target or target scan failed";
-        return target_detect == DetectResult::Error ? FiammettaSelectionResult::Error
-                                                    : FiammettaSelectionResult::NotFound;
-    }
-
-    // Skill sorting is not a guarantee that Fiammetta is on the first page.
-    if (!ProcessTask(*this, { "InfrastOperListTabSkillUnClicked" }).run()) {
-        return FiammettaSelectionResult::Error;
-    }
-    std::vector<infrast::Oper> fiammetta_opers;
-    const DetectResult fiammetta_detect = detect_full_mood_fiammetta(fiammetta_opers);
-    if (fiammetta_detect != DetectResult::Found) {
-        LogInfo << "Skip Fiammetta recovery: full-mood Fiammetta unavailable or scan failed";
-        if (fiammetta_detect == DetectResult::NotFound) {
-            LogWarn << "Full-mood Fiammetta was not found in the operator list";
-        }
-        if (!switch_to_low_mood_sort()) {
-            return FiammettaSelectionResult::Error;
-        }
-        return fiammetta_detect == DetectResult::Error ? FiammettaSelectionResult::Error
-                                                       : FiammettaSelectionResult::NotFound;
-    }
-
-    // 清空保存取消全部选中并消除置顶，重进后重新识别定位，不复用旧坐标。
-    if (!click_clear_button()) {
-        return FiammettaSelectionResult::Error;
-    }
-    if (!click_confirm_button()) {
+    LogInfo << "Fiammetta preparation: clearing dorm before selection";
+    if (!click_clear_button() || !click_confirm_button()) {
         return FiammettaSelectionResult::Error;
     }
     click_return_button();
@@ -550,27 +523,53 @@ asst::InfrastDormTask::FiammettaSelectionResult asst::InfrastDormTask::try_selec
     if (!switch_to_low_mood_sort()) {
         return FiammettaSelectionResult::Error;
     }
+    LogInfo << "Fiammetta dorm cleared and re-entered";
 
+    for (const auto& target : m_fiammetta_targets) {
+        LogInfo << "Configured Fiammetta target:" << target << "threshold:" << m_mood_threshold;
+    }
+    std::vector<infrast::Oper> target_opers;
+    std::string selected_target_name;
+    const DetectResult target_detect = detect_fiammetta_target(target_opers, selected_target_name);
+    if (target_detect != DetectResult::Found) {
+        if (target_detect == DetectResult::Error) {
+            LogError << "Fiammetta target scan failed";
+            return FiammettaSelectionResult::Error;
+        }
+        LogInfo << "Fiammetta recovery skipped: no eligible configured target";
+        return FiammettaSelectionResult::NotFound;
+    }
     // 点选顺序决定进驻顺序，菲亚梅塔必须在目标后一位。
-    target_opers.clear();
-    if (detect_fiammetta_target(target_opers, selected_target_name, selected_target_name) != DetectResult::Found) {
-        return FiammettaSelectionResult::Error;
+    if (infrast::fiammetta_target_needs_relocation(m_fiammetta_targets.size())) {
+        target_opers.clear();
+        if (detect_fiammetta_target(target_opers, selected_target_name, selected_target_name) != DetectResult::Found) {
+            return FiammettaSelectionResult::Error;
+        }
     }
     ctrler()->click(target_opers.front().rect);
+    LogInfo << "Fiammetta target selected:" << selected_target_name;
     if (!ProcessTask(*this, { "InfrastOperListTabSkillUnClicked" }).run()) {
+        click_clear_button();
         discard_pending_selection();
         return FiammettaSelectionResult::Error;
     }
-    fiammetta_opers.clear();
-    if (detect_full_mood_fiammetta(fiammetta_opers) != DetectResult::Found) {
+    std::vector<infrast::Oper> fiammetta_opers;
+    const DetectResult fiammetta_detect = detect_full_mood_fiammetta(fiammetta_opers);
+    if (fiammetta_detect != DetectResult::Found) {
+        const bool cleared = click_clear_button();
         discard_pending_selection();
-        return FiammettaSelectionResult::Error;
+        if (!cleared || fiammetta_detect == DetectResult::Error) {
+            return FiammettaSelectionResult::Error;
+        }
+        LogInfo << "Fiammetta recovery skipped: full-mood Fiammetta not found";
+        return FiammettaSelectionResult::NotFound;
     }
     ctrler()->click(fiammetta_opers.front().rect);
     const auto& id_opt = BattleData.get_first_id(battle::Role::Sniper, "菲亚梅塔");
     if (id_opt) {
         stage_operator_selection(*id_opt);
     }
+    LogInfo << "Fiammetta pair selected";
     return FiammettaSelectionResult::Selected;
 }
 
@@ -642,6 +641,9 @@ asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_fiammetta_targ
                         << "page:" << page << "pages scanned:" << (page + 1);
                 if (!choice.name().empty()) {
                     LogInfo << "Fiammetta target selected:" << choice.name() << "mood:" << choice.mood();
+                    if (!infrast::fiammetta_target_needs_relocation(m_fiammetta_targets.size())) {
+                        std::swap(opers.front(), opers[index]);
+                    }
                     return DetectResult::Found;
                 }
                 LogInfo << "Fiammetta target scan complete: no target below mood threshold:" << m_mood_threshold;

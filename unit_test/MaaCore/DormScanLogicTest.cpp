@@ -3,6 +3,7 @@
 #include "Task/Infrast/DormScanLogic.h"
 
 using asst::infrast::DormPageProgress;
+using asst::infrast::fiammetta_target_needs_relocation;
 using asst::infrast::FiammettaTargetChoice;
 using asst::infrast::station_preset_dorm_auxiliary_enabled;
 using asst::infrast::station_preset_dorm_stages;
@@ -31,6 +32,7 @@ TEST_CASE("Fiammetta target choice skips missing or above-threshold targets")
 
 TEST_CASE("Single Fiammetta target completes on its first recognized page")
 {
+    REQUIRE_FALSE(fiammetta_target_needs_relocation(1));
     FiammettaTargetChoice eligible({ "可露希尔" }, 1.0);
     REQUIRE(eligible.consider("可露希尔", 0.435));
     REQUIRE(eligible.is_complete());
@@ -44,6 +46,7 @@ TEST_CASE("Single Fiammetta target completes on its first recognized page")
 
 TEST_CASE("Three configured targets complete even when some are ineligible")
 {
+    REQUIRE(fiammetta_target_needs_relocation(3));
     FiammettaTargetChoice choice({ "清流", "可露希尔", "但书" }, 0.5);
     REQUIRE(choice.consider("清流", 0.4));
     REQUIRE_FALSE(choice.is_complete());
