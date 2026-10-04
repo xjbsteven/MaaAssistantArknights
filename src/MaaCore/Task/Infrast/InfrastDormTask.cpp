@@ -263,16 +263,12 @@ bool asst::InfrastDormTask::fill_dorm_slots()
     size_t num_of_selected = m_is_custom ? current_room_config().selected : 0;
     bool fill_remaining_slots = m_selection_phase == SelectionPhase::FillRemaining;
 
-    // Trust-autofill exhaustion affects every following dorm, so do not infer it merely
-    // from "the room became full". When the room fills during trust sorting, keep scanning
-    // without clicking until another eligible low-trust operator is found (HasMore) or the
-    // list is proven exhausted by repeated pages (Exhausted).
-    infrast::DormPageProgress trust_progress;
-    std::vector<std::string> trust_seen_faces;
-    const int face_hash_threshold = Task.get("InfrastOperFace")->special_params[0];
+    // Trust sorting is ascending. Therefore a single recognized full-trust (200) entry
+    // proves there can be no lower-trust operators on later pages. Once the room is full,
+    // the current page is also enough to decide whether another low-trust operator remains;
+    // never scan to the physical end of the list just to prove exhaustion.
     size_t trust_pages_scanned = 0;
     bool trust_has_more = false;
-    bool trust_scan_has_face_hash = false;
 
     while (true) {
         if (need_exit()) {
@@ -300,21 +296,10 @@ bool asst::InfrastDormTask::fill_dorm_slots()
             (std::max)(num_of_selected,
                        static_cast<size_t>(std::ranges::count_if(opers, std::mem_fn(&infrast::Oper::selected))));
 
-        size_t new_trust_faces = 0;
+        bool trust_page_saw_full_trust = false;
+        bool trust_page_has_unresolved_trust = false;
         if (m_selection_phase == SelectionPhase::TrustAutofill) {
             ++trust_pages_scanned;
-            for (const auto& oper : opers) {
-                if (oper.face_hash.empty()) {
-                    continue;
-                }
-                trust_scan_has_face_hash = true;
-                if (std::ranges::none_of(trust_seen_faces, [&](const std::string& hash) {
-                        return Hasher::hamming(hash, oper.face_hash) < face_hash_threshold;
-                    })) {
-                    trust_seen_faces.emplace_back(oper.face_hash);
-                    ++new_trust_faces;
-                }
-            }
         }
 
         size_t num_of_resting = 0;
@@ -362,7 +347,8 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                     RegionOCRer trust_analyzer(oper.name_img);
                     if (!trust_analyzer.analyze()) {
                         Log.trace("ERROR:!trust_analyzer.analyze()");
-                        break;
+                        trust_page_has_unresolved_trust = true;
+                        continue;
                     }
 
                     std::string oper_trust_text = trust_analyzer.get_result().text;
@@ -370,12 +356,20 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                     oper_trust_text = boost::regex_replace(oper_trust_text, trust_rule, "");
                     Log.trace("oper_trust_text:", oper_trust_text);
 
-                    bool has_incomplete_trust = false;
-                    if (!oper_trust_text.empty()) {
-                        const int trust = std::stoi(oper_trust_text);
-                        has_incomplete_trust = trust < OperFullTrustValue;
+                    if (oper_trust_text.empty()) {
+                        trust_page_has_unresolved_trust = true;
+                        continue;
                     }
 
+                    const int trust = std::stoi(oper_trust_text);
+                    if (trust >= OperFullTrustValue) {
+                        // Trust list is ascending. Seeing 200 on this page proves every later
+                        // page is also full-trust, so no facility OCR or further swiping is needed.
+                        trust_page_saw_full_trust = true;
+                        continue;
+                    }
+
+                    const bool has_incomplete_trust = true;
                     bool is_not_stationed = false;
                     RegionOCRer facility_analyzer(oper.facility_img);
                     if (!facility_analyzer.analyze()) {
@@ -451,17 +445,20 @@ bool asst::InfrastDormTask::fill_dorm_slots()
             }
         }
 
-        if (trust_has_more) {
-            break;
-        }
-
-        // Trust-autofill is the only phase where a full room does not immediately end the
-        // room: continue read-only scanning so we can distinguish "fifth was the last
-        // low-trust operator" from "more low-trust operators exist for the next dorm".
         if (m_selection_phase == SelectionPhase::TrustAutofill) {
-            const bool reached_end = trust_scan_has_face_hash && trust_progress.reached_end(new_trust_faces);
-            if (reached_end) {
-                Log.info("trust autofill pool exhausted after pages:", trust_pages_scanned);
+            const auto decision = infrast::decide_trust_page(
+                num_of_selected >= max_num_of_opers(),
+                trust_page_saw_full_trust,
+                trust_has_more,
+                trust_page_has_unresolved_trust);
+
+            if (decision == infrast::TrustPageDecision::MoreMayRemain) {
+                Log.info("trust autofill stops on current page; more low-trust operators may remain");
+                break;
+            }
+
+            if (decision == infrast::TrustPageDecision::Exhausted) {
+                Log.info("trust autofill pool exhausted on current page after pages:", trust_pages_scanned);
                 m_trust_pool_exhausted = true;
                 m_selection_phase = SelectionPhase::FillRemaining;
                 fill_remaining_slots = true;
@@ -482,10 +479,10 @@ bool asst::InfrastDormTask::fill_dorm_slots()
             }
 
             if (trust_pages_scanned >= MaxTrustScanPages) {
-                // Fail safe: do not mark the global trust pool exhausted unless list-end
-                // detection succeeded. Fill the current room normally, but let the next dorm
-                // retry the destructive trust pass.
-                Log.warn("trust autofill scan reached safety page limit without proving exhaustion");
+                // Fail safe for unusual cases where every scanned entry is still below 200
+                // (or trust OCR remains unresolved) while the room is not yet full.
+                // Do not claim global exhaustion; fill only this room normally.
+                Log.warn("trust autofill scan reached safety page limit without a full-trust boundary");
                 m_selection_phase = SelectionPhase::FillRemaining;
                 fill_remaining_slots = true;
                 if (!m_notstationed_filter_enabled && m_notstationed_filter_active) {

@@ -2,12 +2,47 @@
 
 #include "Task/Infrast/DormScanLogic.h"
 
+using asst::infrast::decide_trust_page;
 using asst::infrast::DormPageProgress;
 using asst::infrast::fiammetta_target_needs_relocation;
 using asst::infrast::FiammettaTargetChoice;
 using asst::infrast::station_preset_dorm_auxiliary_enabled;
 using asst::infrast::station_preset_dorm_stages;
 using asst::infrast::StationPresetDormStage;
+using asst::infrast::TrustPageDecision;
+
+TEST_CASE("Trust page uses the first full-trust boundary instead of scanning to list end")
+{
+    // Real-world regression: a dorm starts with 3 operators, then trust sort shows
+    // 153, 196, 200, 200... Selecting 153 and 196 fills the room. Seeing 200 on
+    // that same page must mark the global low-trust pool exhausted immediately.
+    REQUIRE(
+        decide_trust_page(true, true, false, false) ==
+        TrustPageDecision::Exhausted);
+
+    // If another eligible <200 operator is still visible after the fifth slot was
+    // filled, the next dorm must continue the destructive pass.
+    REQUIRE(
+        decide_trust_page(true, true, true, false) ==
+        TrustPageDecision::MoreMayRemain);
+
+    // A full room without a reliable 200 boundary must not swipe to the physical
+    // end merely to prove exhaustion; conservatively retry from the next dorm.
+    REQUIRE(
+        decide_trust_page(true, false, false, false) ==
+        TrustPageDecision::MoreMayRemain);
+
+    // If the room still has vacancies and no 200 boundary is visible, continue to
+    // the next trust-sorted page because more <200 candidates may be needed.
+    REQUIRE(
+        decide_trust_page(false, false, false, false) ==
+        TrustPageDecision::ContinueScanning);
+
+    // OCR uncertainty prevents a false global exhaustion decision.
+    REQUIRE(
+        decide_trust_page(true, true, false, true) ==
+        TrustPageDecision::MoreMayRemain);
+}
 
 TEST_CASE("Fiammetta target choice spans pages and selects the lowest mood")
 {
