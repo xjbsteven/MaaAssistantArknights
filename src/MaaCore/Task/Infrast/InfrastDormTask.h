@@ -69,6 +69,7 @@ private:
     virtual bool _run() override;
 
     bool fill_dorm_slots();
+    std::optional<size_t> current_selected_count();
     bool should_select_dorm_managers() const noexcept;
     bool select_dorm_managers();
     bool run_fiammetta_preparation();
@@ -101,6 +102,7 @@ private:
 
     SelectionPhase m_selection_phase = SelectionPhase::LowMood;
     bool m_notstationed_filter_active = false;
+    bool m_trust_pool_exhausted = false; // 一旦确认没有更多可用低信赖干员，后续宿舍只做非破坏补位
     bool m_prepare_phase = false;
     bool m_fiammetta_checked = false;
     std::vector<std::string> m_fiammetta_targets;

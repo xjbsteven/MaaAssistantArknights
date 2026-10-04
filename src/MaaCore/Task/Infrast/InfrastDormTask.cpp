@@ -32,9 +32,7 @@ constexpr double FullMoodThreshold = 0.99;
 constexpr size_t MaxConfiguredTargets = 3;
 
 constexpr int OperFullTrustValue = 200;
-// After enough full-trust candidates are seen on one page, trust autofill is
-// considered exhausted and the flow falls back to regular filling.
-constexpr size_t TrustAutofillThreshold = 6;
+constexpr size_t MaxTrustScanPages = 30;
 // Seeing enough resting entries means the low-mood scan on the current page is
 // effectively finished, so the flow can switch to the next phase.
 constexpr size_t RestingOperCountThreshold = 6;
@@ -145,6 +143,9 @@ bool asst::InfrastDormTask::_run()
 {
     if (m_cur_facility_index == 0) {
         m_fiammetta_checked = false;
+        if (!m_prepare_phase) {
+            m_trust_pool_exhausted = false;
+        }
     }
     for (; m_cur_facility_index < m_max_num_of_dorm; ++m_cur_facility_index) {
         if (need_exit()) {
@@ -165,10 +166,10 @@ bool asst::InfrastDormTask::_run()
             return false;
         }
 
-        // m_selection_phase 是 MAA 内部的选人流程阶段，属于每间宿舍的独立逻辑，
-        // 不能跨宿舍继承，否则上一间跑完信赖补位后停留在 TrustAutofill /
-        // FillRemaining 的阶段会被下一间继承，导致跳过低心情扫描直接补满剩余位置。
-        m_selection_phase = SelectionPhase::LowMood;
+        // 信赖池尚未确认耗尽时，每间宿舍都从低心情阶段重新开始；一旦上一间
+        // 已完整扫描信赖列表并确认没有更多可用低信赖干员，后续宿舍永久切换为
+        // 非破坏 FillRemaining，只补空位，不再清空/重排现有人员。
+        m_selection_phase = m_trust_pool_exhausted ? SelectionPhase::FillRemaining : SelectionPhase::LowMood;
 
         close_quick_formation_expand_role();
 
@@ -221,15 +222,27 @@ bool asst::InfrastDormTask::_run()
                 return false;
             }
         }
-        else {
-            // 常规重排轮与自定义 autofill 宿舍均先清空再补人：休整充足的干员
-            // 让出位置，由未进驻池中的低心情干员按心情升序补入，宿舍始终收敛
-            // 为最需要休息的一批人。
+        else if (!m_trust_pool_exhausted) {
+            // 信赖池耗尽前保持原有重排语义：先清空，再按低心情/低信赖重建宿舍。
             click_clear_button();
+        }
+        else {
+            // 信赖池已耗尽：后续宿舍只补真正空位。若当前宿舍已经 5/5，
+            // 进入选人页后立即返回，不做确认、清空或任何重新选人。
+            const auto selected = current_selected_count();
+            if (!selected) {
+                return false;
+            }
+            if (*selected >= max_num_of_opers()) {
+                Log.info("dorm already full after trust pool exhausted, skip room:", m_cur_facility_index);
+                click_return_button();
+                continue;
+            }
         }
 
         if (!m_is_custom || current_room_config().autofill) {
-            if (!m_prepare_phase && !m_is_custom && should_select_dorm_managers() && !select_dorm_managers()) {
+            if (!m_prepare_phase && !m_is_custom && !m_trust_pool_exhausted && should_select_dorm_managers() &&
+                !select_dorm_managers()) {
                 return false;
             }
             if (!fill_dorm_slots()) {
@@ -248,13 +261,30 @@ bool asst::InfrastDormTask::_run()
 bool asst::InfrastDormTask::fill_dorm_slots()
 {
     size_t num_of_selected = m_is_custom ? current_room_config().selected : 0;
-    size_t num_of_fulltrust = 0;
-    bool fill_remaining_slots = false;
+    bool fill_remaining_slots = m_selection_phase == SelectionPhase::FillRemaining;
 
-    while (num_of_selected < max_num_of_opers()) {
+    // Trust-autofill exhaustion affects every following dorm, so do not infer it merely
+    // from "the room became full". When the room fills during trust sorting, keep scanning
+    // without clicking until another eligible low-trust operator is found (HasMore) or the
+    // list is proven exhausted by repeated pages (Exhausted).
+    infrast::DormPageProgress trust_progress;
+    std::vector<std::string> trust_seen_faces;
+    const int face_hash_threshold = Task.get("InfrastOperFace")->special_params[0];
+    size_t trust_pages_scanned = 0;
+    bool trust_has_more = false;
+    bool trust_scan_has_face_hash = false;
+
+    while (true) {
         if (need_exit()) {
             return false;
         }
+
+        // A room that filled before trust scanning (for example entirely with low-mood
+        // operators), or a non-destructive FillRemaining room, is already complete.
+        if (num_of_selected >= max_num_of_opers() && m_selection_phase != SelectionPhase::TrustAutofill) {
+            break;
+        }
+
         const auto image = ctrler()->get_image();
         InfrastOperImageAnalyzer oper_analyzer(image);
 
@@ -270,16 +300,40 @@ bool asst::InfrastDormTask::fill_dorm_slots()
             (std::max)(num_of_selected,
                        static_cast<size_t>(std::ranges::count_if(opers, std::mem_fn(&infrast::Oper::selected))));
 
+        size_t new_trust_faces = 0;
+        if (m_selection_phase == SelectionPhase::TrustAutofill) {
+            ++trust_pages_scanned;
+            for (const auto& oper : opers) {
+                if (oper.face_hash.empty()) {
+                    continue;
+                }
+                trust_scan_has_face_hash = true;
+                if (std::ranges::none_of(trust_seen_faces, [&](const std::string& hash) {
+                        return Hasher::hamming(hash, oper.face_hash) < face_hash_threshold;
+                    })) {
+                    trust_seen_faces.emplace_back(oper.face_hash);
+                    ++new_trust_faces;
+                }
+            }
+        }
+
         size_t num_of_resting = 0;
         for (const auto& oper : opers) {
             if (need_exit()) {
                 return false;
             }
-            if (num_of_selected >= max_num_of_opers()) {
+
+            // Once a trust candidate filled the fifth slot, continue this trust page in
+            // probe-only mode. In all other phases a full room can stop immediately.
+            if (num_of_selected >= max_num_of_opers() && m_selection_phase != SelectionPhase::TrustAutofill) {
                 Log.info("num_of_selected:", num_of_selected, ", just break");
                 break;
             }
+
             if (fill_remaining_slots) {
+                if (num_of_selected >= max_num_of_opers()) {
+                    break;
+                }
                 if (oper.doing != infrast::Doing::Working && !oper.selected) {
                     Log.info("fill remaining slots");
                     ctrler()->click(oper.rect);
@@ -293,7 +347,8 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                 if (m_selection_phase == SelectionPhase::FillRemaining) {
                     fill_remaining_slots = true;
                     Log.info("switch to fill remaining slots");
-                    if (oper.doing != infrast::Doing::Working && !oper.selected) {
+                    if (num_of_selected < max_num_of_opers() && oper.doing != infrast::Doing::Working &&
+                        !oper.selected) {
                         Log.info("fill remaining slots");
                         ctrler()->click(oper.rect);
                         ++num_of_selected;
@@ -301,8 +356,9 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                     continue;
                 }
 
-                if (m_trust_autofill_enabled && m_selection_phase != SelectionPhase::LowMood && !oper.selected &&
-                    oper.doing != infrast::Doing::Working && oper.doing != infrast::Doing::Resting) {
+                if (m_trust_autofill_enabled && m_selection_phase == SelectionPhase::TrustAutofill &&
+                    !oper.selected && oper.doing != infrast::Doing::Working &&
+                    oper.doing != infrast::Doing::Resting) {
                     RegionOCRer trust_analyzer(oper.name_img);
                     if (!trust_analyzer.analyze()) {
                         Log.trace("ERROR:!trust_analyzer.analyze()");
@@ -317,22 +373,7 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                     bool has_incomplete_trust = false;
                     if (!oper_trust_text.empty()) {
                         const int trust = std::stoi(oper_trust_text);
-                        if (trust < OperFullTrustValue) {
-                            has_incomplete_trust = true;
-                        }
-                        else {
-                            ++num_of_fulltrust;
-                        }
-                    }
-                    if (num_of_fulltrust >= TrustAutofillThreshold) {
-                        Log.trace("num_of_fulltrust:", num_of_fulltrust);
-                        m_selection_phase = SelectionPhase::FillRemaining;
-                        fill_remaining_slots = true;
-                        if (!m_notstationed_filter_enabled && m_notstationed_filter_active) {
-                            set_notstationed_filter(false);
-                        }
-                        switch_to_mood_sort();
-                        break;
+                        has_incomplete_trust = trust < OperFullTrustValue;
                     }
 
                     bool is_not_stationed = false;
@@ -358,8 +399,17 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                     }
 
                     if (has_incomplete_trust && is_not_stationed) {
-                        ctrler()->click(oper.rect);
-                        ++num_of_selected;
+                        if (num_of_selected < max_num_of_opers()) {
+                            ctrler()->click(oper.rect);
+                            ++num_of_selected;
+                        }
+                        else {
+                            // The current room is full, but another eligible low-trust operator
+                            // proves that the next dorm must still use the destructive trust pass.
+                            trust_has_more = true;
+                            Log.info("trust autofill probe found another eligible operator");
+                            break;
+                        }
                     }
                     else {
                         Log.trace("skip trust autofill candidate");
@@ -369,8 +419,6 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                     ++num_of_resting >= RestingOperCountThreshold && m_selection_phase != SelectionPhase::LowMood) {
                     Log.trace("num_of_resting:", num_of_resting, ", dorm finished");
                     if (m_trust_autofill_enabled) {
-                        // We have exhausted the low-mood pass on this page. Switch to the
-                        // trust-autofill view and let the next iteration re-read the list.
                         switch_to_trust_autofill_phase();
                     }
                     else {
@@ -381,7 +429,8 @@ bool asst::InfrastDormTask::fill_dorm_slots()
 
             case infrast::SmileyType::Work:
             case infrast::SmileyType::Distract:
-                if (!oper.selected && oper.doing != infrast::Doing::Working) {
+                if (num_of_selected < max_num_of_opers() && !oper.selected &&
+                    oper.doing != infrast::Doing::Working) {
                     ctrler()->click(oper.rect);
                     ++num_of_selected;
                 }
@@ -392,7 +441,7 @@ bool asst::InfrastDormTask::fill_dorm_slots()
             }
 
             // Sorting changes the visible list order, so stop this pass and OCR again.
-            if (m_selection_phase == SelectionPhase::ResortForTrust) {
+            if (m_selection_phase == SelectionPhase::ResortForTrust || trust_has_more) {
                 break;
             }
 
@@ -400,6 +449,61 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                 swipe_of_operlist();
                 break;
             }
+        }
+
+        if (trust_has_more) {
+            break;
+        }
+
+        // Trust-autofill is the only phase where a full room does not immediately end the
+        // room: continue read-only scanning so we can distinguish "fifth was the last
+        // low-trust operator" from "more low-trust operators exist for the next dorm".
+        if (m_selection_phase == SelectionPhase::TrustAutofill) {
+            const bool reached_end = trust_scan_has_face_hash && trust_progress.reached_end(new_trust_faces);
+            if (reached_end) {
+                Log.info("trust autofill pool exhausted after pages:", trust_pages_scanned);
+                m_trust_pool_exhausted = true;
+                m_selection_phase = SelectionPhase::FillRemaining;
+                fill_remaining_slots = true;
+
+                if (!m_notstationed_filter_enabled && m_notstationed_filter_active) {
+                    if (!set_notstationed_filter(false)) {
+                        return false;
+                    }
+                }
+                if (!switch_to_mood_sort()) {
+                    return false;
+                }
+
+                if (num_of_selected >= max_num_of_opers()) {
+                    break;
+                }
+                continue;
+            }
+
+            if (trust_pages_scanned >= MaxTrustScanPages) {
+                // Fail safe: do not mark the global trust pool exhausted unless list-end
+                // detection succeeded. Fill the current room normally, but let the next dorm
+                // retry the destructive trust pass.
+                Log.warn("trust autofill scan reached safety page limit without proving exhaustion");
+                m_selection_phase = SelectionPhase::FillRemaining;
+                fill_remaining_slots = true;
+                if (!m_notstationed_filter_enabled && m_notstationed_filter_active) {
+                    if (!set_notstationed_filter(false)) {
+                        return false;
+                    }
+                }
+                if (!switch_to_mood_sort()) {
+                    return false;
+                }
+                if (num_of_selected >= max_num_of_opers()) {
+                    break;
+                }
+                continue;
+            }
+
+            swipe_of_operlist();
+            continue;
         }
 
         if (num_of_selected >= max_num_of_opers()) {
@@ -437,6 +541,18 @@ bool asst::InfrastDormTask::fill_dorm_slots()
     }
 
     return true;
+}
+
+std::optional<size_t> asst::InfrastDormTask::current_selected_count()
+{
+    InfrastOperImageAnalyzer analyzer(ctrler()->get_image());
+    analyzer.set_to_be_calced(InfrastOperImageAnalyzer::ToBeCalced::Selected);
+    if (!analyzer.analyze()) {
+        Log.warn("failed to count selected dorm operators");
+        return std::nullopt;
+    }
+    return static_cast<size_t>(
+        std::ranges::count_if(analyzer.get_result(), std::mem_fn(&infrast::Oper::selected)));
 }
 
 bool asst::InfrastDormTask::select_dorm_managers()
@@ -780,6 +896,9 @@ void asst::InfrastDormTask::switch_to_trust_autofill_phase()
     set_notstationed_filter(true);
     Log.trace("click_sort_by_trust_button");
     click_sort_by_trust_button();
+    // Exhaustion is now determined by scanning to repeated pages, so always start the
+    // trust-ordered scan from the beginning of the operator list.
+    swipe_to_the_left_of_operlist();
     m_selection_phase = SelectionPhase::ResortForTrust;
 }
 
