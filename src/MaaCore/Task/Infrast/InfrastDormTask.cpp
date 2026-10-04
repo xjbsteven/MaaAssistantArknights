@@ -238,6 +238,14 @@ bool asst::InfrastDormTask::_run()
                 click_return_button();
                 continue;
             }
+
+            // FillRemaining must never pull an operator out of an earlier dorm. The trust
+            // phase already uses "not stationed"; keep the same safety invariant for every
+            // later partially-filled dorm even when the user's standalone not-stationed
+            // option is disabled.
+            if (!set_notstationed_filter(true)) {
+                return false;
+            }
         }
 
         if (!m_is_custom || current_room_config().autofill) {
@@ -246,6 +254,16 @@ bool asst::InfrastDormTask::_run()
                 return false;
             }
             if (!fill_dorm_slots()) {
+                return false;
+            }
+        }
+
+        // Trust autofill temporarily enables "not stationed". Keep it enabled throughout
+        // FillRemaining so earlier dorm occupants cannot be selected, then restore the UI
+        // preference before leaving this room if the user did not enable that option.
+        if (!room_uses_custom_opers && m_trust_pool_exhausted && !m_notstationed_filter_enabled &&
+            m_notstationed_filter_active) {
+            if (!set_notstationed_filter(false)) {
                 return false;
             }
         }
@@ -319,7 +337,10 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                 if (num_of_selected >= max_num_of_opers()) {
                     break;
                 }
-                if (oper.doing != infrast::Doing::Working && !oper.selected) {
+                if (infrast::can_fill_remaining(
+                        oper.selected,
+                        oper.doing == infrast::Doing::Working,
+                        oper.doing == infrast::Doing::Resting)) {
                     Log.info("fill remaining slots");
                     ctrler()->click(oper.rect);
                     ++num_of_selected;
@@ -332,8 +353,11 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                 if (m_selection_phase == SelectionPhase::FillRemaining) {
                     fill_remaining_slots = true;
                     Log.info("switch to fill remaining slots");
-                    if (num_of_selected < max_num_of_opers() && oper.doing != infrast::Doing::Working &&
-                        !oper.selected) {
+                    if (num_of_selected < max_num_of_opers() &&
+                        infrast::can_fill_remaining(
+                            oper.selected,
+                            oper.doing == infrast::Doing::Working,
+                            oper.doing == infrast::Doing::Resting)) {
                         Log.info("fill remaining slots");
                         ctrler()->click(oper.rect);
                         ++num_of_selected;
@@ -463,11 +487,6 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                 m_selection_phase = SelectionPhase::FillRemaining;
                 fill_remaining_slots = true;
 
-                if (!m_notstationed_filter_enabled && m_notstationed_filter_active) {
-                    if (!set_notstationed_filter(false)) {
-                        return false;
-                    }
-                }
                 if (!switch_to_mood_sort()) {
                     return false;
                 }
@@ -485,11 +504,6 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                 Log.warn("trust autofill scan reached safety page limit without a full-trust boundary");
                 m_selection_phase = SelectionPhase::FillRemaining;
                 fill_remaining_slots = true;
-                if (!m_notstationed_filter_enabled && m_notstationed_filter_active) {
-                    if (!set_notstationed_filter(false)) {
-                        return false;
-                    }
-                }
                 if (!switch_to_mood_sort()) {
                     return false;
                 }

@@ -2,6 +2,7 @@
 
 #include "Task/Infrast/DormScanLogic.h"
 
+using asst::infrast::can_fill_remaining;
 using asst::infrast::decide_trust_page;
 using asst::infrast::DormPageProgress;
 using asst::infrast::fiammetta_target_needs_relocation;
@@ -10,6 +11,14 @@ using asst::infrast::station_preset_dorm_auxiliary_enabled;
 using asst::infrast::station_preset_dorm_stages;
 using asst::infrast::StationPresetDormStage;
 using asst::infrast::TrustPageDecision;
+
+TEST_CASE("FillRemaining never steals operators from earlier dorms")
+{
+    REQUIRE(can_fill_remaining(false, false, false));
+    REQUIRE_FALSE(can_fill_remaining(true, false, false));
+    REQUIRE_FALSE(can_fill_remaining(false, true, false));
+    REQUIRE_FALSE(can_fill_remaining(false, false, true));
+}
 
 TEST_CASE("Trust page uses the first full-trust boundary instead of scanning to list end")
 {

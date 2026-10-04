@@ -63,6 +63,13 @@ inline bool fiammetta_target_needs_relocation(size_t configured_target_count) no
     return configured_target_count > 1;
 }
 
+inline bool can_fill_remaining(bool selected, bool working, bool resting) noexcept
+{
+    // FillRemaining is non-destructive: never move an operator that is already working
+    // or resting in another facility/dorm, and never re-click an already selected entry.
+    return !selected && !working && !resting;
+}
+
 enum class TrustPageDecision
 {
     ContinueScanning,
