@@ -531,6 +531,12 @@ Tag 等級（大於等於 3）對應的期望招募時限（單位：分鐘）�
 @optional
 貿易站 ｢源石碎片｣ 是否自動補貨。  
 :::  
+::: field collect  
+@type boolean
+@default true
+@optional
+進入基建後獨立執行一次一鍵收穫，包括目前支援的製造站、貿易站、回收站材料與幹員信賴等全部獎勵。預設開啟以相容舊設定；關閉後導航不再自動收取。  
+:::  
 ::: field dorm_notstationed_enabled  
 @type boolean
 @default false
