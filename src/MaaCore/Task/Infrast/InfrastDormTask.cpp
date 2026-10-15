@@ -1,4 +1,5 @@
 #include "InfrastDormTask.h"
+#include "DormScanLogic.h"
 
 #include <algorithm>
 #include <array>
@@ -14,6 +15,7 @@
 #include "Controller/Controller.h"
 #include "Task/ProcessTask.h"
 #include "Utils/Logger.hpp"
+#include "Vision/Hasher.h"
 #include "Vision/Infrast/InfrastOperImageAnalyzer.h"
 #include "Vision/Matcher.h"
 #include "Vision/RegionOCRer.h"
@@ -26,12 +28,13 @@ namespace
 constexpr std::array<std::string_view, 6> SupportedFiammettaTargets = { "清流", "可露希尔", "但书",
                                                                         "巫恋", "龙舌兰",   "歌蕾蒂娅" };
 constexpr std::array<std::string_view, 3> DefaultFiammettaTargets = { "清流", "可露希尔", "但书" };
+constexpr double FullMoodThreshold = 0.99;
 constexpr size_t MaxConfiguredTargets = 3;
 
 constexpr int OperFullTrustValue = 200;
 // After enough full-trust candidates are seen on one page, trust autofill is
 // considered exhausted and the flow falls back to regular filling.
-constexpr size_t TrustAutofillThreshold = 6;
+constexpr size_t MaxTrustScanPages = 30;
 // Seeing enough resting entries means the low-mood scan on the current page is
 // effectively finished, so the flow can switch to the next phase.
 constexpr size_t RestingOperCountThreshold = 6;
@@ -132,10 +135,19 @@ asst::InfrastDormTask& asst::InfrastDormTask::set_fiammetta_targets(std::vector<
     return *this;
 }
 
+bool asst::InfrastDormTask::on_run_fails()
+{
+    m_notstationed_filter_active = false;
+    return asst::InfrastAbstractTask::on_run_fails();
+}
+
 bool asst::InfrastDormTask::_run()
 {
     if (m_cur_facility_index == 0) {
         m_fiammetta_checked = false;
+        if (!m_prepare_phase) {
+            m_trust_pool_exhausted = false;
+        }
     }
     // 空房间数组时整设施保持原样，不进任何宿舍；
     // skip 与空意图不在设施入口判定，留在循环内进设施前按时序消费
@@ -171,7 +183,7 @@ bool asst::InfrastDormTask::_run()
         // m_selection_phase 是 MAA 内部的选人流程阶段，属于每间宿舍的独立逻辑，
         // 不能跨宿舍继承，否则上一间跑完信赖补位后停留在 TrustAutofill /
         // FillRemaining 的阶段会被下一间继承，导致跳过低心情扫描直接补满剩余位置。
-        m_selection_phase = SelectionPhase::LowMood;
+        m_selection_phase = m_trust_pool_exhausted ? SelectionPhase::FillRemaining : SelectionPhase::LowMood;
 
         close_quick_formation_expand_role();
 
@@ -194,7 +206,7 @@ bool asst::InfrastDormTask::_run()
         // 每间宿舍都去界面上真设置一遍（底层已选中时一次匹配直接通过），不依赖
         // 上一间留下的筛选状态，防止中途意外退出重进基建后游戏丢失筛选设置
         if (m_notstationed_filter_enabled && !room_uses_custom_opers && !is_default_prepare_phase) {
-            if (!click_filter_menu_not_stationed_button()) {
+            if (!set_notstationed_filter(true)) {
                 return false;
             }
         }
@@ -207,36 +219,62 @@ bool asst::InfrastDormTask::_run()
         }
 
         if (room_uses_custom_opers) {
-            // Custom dorm operators may already be resting in other dorms.
-            // 点名干员可能在其他宿舍休息，swipe_and_select_custom_opers 进入时会把筛选恢复为
-            // “全部”；选完不再恢复筛选，后续低心情补位/下一间进入时按各自需要重新声明
+            // 点名干员可能在其他设施工作/休息。临时关闭未进驻筛选，之后按房间意图恢复。
+            const bool filter_was_active_before_custom_select = m_notstationed_filter_active;
+            const bool should_restore_notstationed_filter =
+                filter_was_active_before_custom_select || m_notstationed_filter_enabled;
+            if (filter_was_active_before_custom_select && !set_notstationed_filter(false)) {
+                return false;
+            }
             bool room_kept_unchanged = false;
             swipe_and_select_custom_opers(true, false, &room_kept_unchanged);
             if (room_kept_unchanged) {
-                // 纯候补全部在其他设施工作等计划内不可用，选人已在函数内部还原配置并保持原样退出选人界面
-                // （不确认，未确认的清空与选择不生效）；选人函数停在房间页，此处补一次返回回主界面，
-                // 对齐确认路径的退出深度，否则下一间 enter_facility 在房间页找不到宿舍入口；
-                // 跳过筛选恢复与后续确认流程继续下一间，下一间进入时按各自配置重新设置
+                // 上游保留配置行为：未确认的选择不会生效，当前在房间页。
                 click_return_button();
                 continue;
             }
-
+            if (should_restore_notstationed_filter && !set_notstationed_filter(true)) {
+                return false;
+            }
             if (!restore_list_sort_for_selection_phase(room_config)) {
                 return false;
             }
         }
-        else {
-            // 常规重排轮与自定义 autofill 宿舍均先清空再补人：休整充足的干员
-            // 让出位置，由未进驻池中的低心情干员按心情升序补入，宿舍始终收敛
-            // 为最需要休息的一批人。
+        else if (!m_trust_pool_exhausted) {
+            // 信赖池耗尽前仍按已确认的低心情、低信赖顺序重建宿舍。
             click_clear_button();
+        }
+        else {
+            // 信赖池已耗尽：后续宿舍保持现有人选，只补空位。
+            const auto selected = current_selected_count();
+            if (!selected) {
+                return false;
+            }
+            if (*selected >= max_num_of_opers()) {
+                Log.info("dorm already full after trust pool exhausted, skip room:", m_cur_facility_index);
+                click_return_button();
+                continue;
+            }
+            // 防止补位从之前的宿舍抢人。
+            if (!set_notstationed_filter(true)) {
+                return false;
+            }
         }
 
         if (!m_is_custom || current_room_config().autofill) {
-            if (!m_prepare_phase && !m_is_custom && should_select_dorm_managers() && !select_dorm_managers()) {
+            if (!m_prepare_phase && !m_is_custom && !m_trust_pool_exhausted && should_select_dorm_managers() &&
+                !select_dorm_managers()) {
                 return false;
             }
             if (!fill_dorm_slots()) {
+                return false;
+            }
+        }
+
+        // 不让短暂开启的未进驻筛选影响下一间宿舍的用户配置。
+        if (!room_uses_custom_opers && m_trust_pool_exhausted && !m_notstationed_filter_enabled &&
+            m_notstationed_filter_active) {
+            if (!set_notstationed_filter(false)) {
                 return false;
             }
         }
@@ -251,22 +289,27 @@ bool asst::InfrastDormTask::_run()
 
 bool asst::InfrastDormTask::fill_dorm_slots()
 {
-    LogTraceFunction;
-
-    // 低心情与信赖补位都从未进驻干员里选（enabled 时）；autofill 房间前一步点名会把筛选
-    // 恢复为“全部”，这里重新声明，常规房间此调用幂等
-    if (m_notstationed_filter_enabled && !click_filter_menu_not_stationed_button()) {
-        return false;
-    }
-
     size_t num_of_selected = m_is_custom ? current_room_config().selected : 0;
-    size_t num_of_fulltrust = 0;
-    bool fill_remaining_slots = false;
+    bool fill_remaining_slots = m_selection_phase == SelectionPhase::FillRemaining;
 
-    while (num_of_selected < max_num_of_opers()) {
+    // Trust sorting is ascending. Therefore a single recognized full-trust (200) entry
+    // proves there can be no lower-trust operators on later pages. Once the room is full,
+    // the current page is also enough to decide whether another low-trust operator remains;
+    // never scan to the physical end of the list just to prove exhaustion.
+    size_t trust_pages_scanned = 0;
+    bool trust_has_more = false;
+
+    while (true) {
         if (need_exit()) {
             return false;
         }
+
+        // A room that filled before trust scanning (for example entirely with low-mood
+        // operators), or a non-destructive FillRemaining room, is already complete.
+        if (num_of_selected >= max_num_of_opers() && m_selection_phase != SelectionPhase::TrustAutofill) {
+            break;
+        }
+
         const auto image = ctrler()->get_image();
         InfrastOperImageAnalyzer oper_analyzer(image);
 
@@ -282,17 +325,33 @@ bool asst::InfrastDormTask::fill_dorm_slots()
             (std::max)(num_of_selected,
                        static_cast<size_t>(std::ranges::count_if(opers, std::mem_fn(&infrast::Oper::selected))));
 
+        bool trust_page_saw_full_trust = false;
+        bool trust_page_has_unresolved_trust = false;
+        if (m_selection_phase == SelectionPhase::TrustAutofill) {
+            ++trust_pages_scanned;
+        }
+
         size_t num_of_resting = 0;
         for (const auto& oper : opers) {
             if (need_exit()) {
                 return false;
             }
-            if (num_of_selected >= max_num_of_opers()) {
+
+            // Once a trust candidate filled the fifth slot, continue this trust page in
+            // probe-only mode. In all other phases a full room can stop immediately.
+            if (num_of_selected >= max_num_of_opers() && m_selection_phase != SelectionPhase::TrustAutofill) {
                 Log.info("num_of_selected:", num_of_selected, ", just break");
                 break;
             }
+
             if (fill_remaining_slots) {
-                if (oper.doing != infrast::Doing::Working && !oper.selected) {
+                if (num_of_selected >= max_num_of_opers()) {
+                    break;
+                }
+                if (infrast::can_fill_remaining(
+                        oper.selected,
+                        oper.doing == infrast::Doing::Working,
+                        oper.doing == infrast::Doing::Resting)) {
                     Log.info("fill remaining slots");
                     ctrler()->click(oper.rect);
                     ++num_of_selected;
@@ -305,7 +364,11 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                 if (m_selection_phase == SelectionPhase::FillRemaining) {
                     fill_remaining_slots = true;
                     Log.info("switch to fill remaining slots");
-                    if (oper.doing != infrast::Doing::Working && !oper.selected) {
+                    if (num_of_selected < max_num_of_opers() &&
+                        infrast::can_fill_remaining(
+                            oper.selected,
+                            oper.doing == infrast::Doing::Working,
+                            oper.doing == infrast::Doing::Resting)) {
                         Log.info("fill remaining slots");
                         ctrler()->click(oper.rect);
                         ++num_of_selected;
@@ -313,12 +376,14 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                     continue;
                 }
 
-                if (m_trust_autofill_enabled && m_selection_phase != SelectionPhase::LowMood && !oper.selected &&
-                    oper.doing != infrast::Doing::Working && oper.doing != infrast::Doing::Resting) {
+                if (m_trust_autofill_enabled && m_selection_phase == SelectionPhase::TrustAutofill &&
+                    !oper.selected && oper.doing != infrast::Doing::Working &&
+                    oper.doing != infrast::Doing::Resting) {
                     RegionOCRer trust_analyzer(oper.name_img);
                     if (!trust_analyzer.analyze()) {
                         Log.trace("ERROR:!trust_analyzer.analyze()");
-                        break;
+                        trust_page_has_unresolved_trust = true;
+                        continue;
                     }
 
                     std::string oper_trust_text = trust_analyzer.get_result().text;
@@ -326,45 +391,54 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                     oper_trust_text = boost::regex_replace(oper_trust_text, trust_rule, "");
                     Log.trace("oper_trust_text:", oper_trust_text);
 
-                    bool has_incomplete_trust = false;
-                    if (!oper_trust_text.empty()) {
-                        const int trust = std::stoi(oper_trust_text);
-                        if (trust < OperFullTrustValue) {
-                            has_incomplete_trust = true;
-                        }
-                        else {
-                            ++num_of_fulltrust;
-                        }
-                    }
-                    if (num_of_fulltrust >= TrustAutofillThreshold) {
-                        Log.trace("num_of_fulltrust:", num_of_fulltrust);
-                        m_selection_phase = SelectionPhase::FillRemaining;
-                        fill_remaining_slots = true;
-                        if (!m_notstationed_filter_enabled) {
-                            // 补满剩余位置从“全部”列表补（在班但未工作的也可以），探测到
-                            // 未进驻选中态才纠偏；enabled 时维持未进驻筛选补位，与既有行为一致
-                            ensure_notstationed_filter_off();
-                        }
-                        switch_to_mood_sort();
-                        break;
+                    if (oper_trust_text.empty()) {
+                        trust_page_has_unresolved_trust = true;
+                        continue;
                     }
 
+                    const int trust = std::stoi(oper_trust_text);
+                    if (trust >= OperFullTrustValue) {
+                        // Trust list is ascending. Seeing 200 on this page proves every later
+                        // page is also full-trust, so no facility OCR or further swiping is needed.
+                        trust_page_saw_full_trust = true;
+                        continue;
+                    }
+
+                    const bool has_incomplete_trust = true;
+                    bool is_not_stationed = false;
                     RegionOCRer facility_analyzer(oper.facility_img);
                     if (!facility_analyzer.analyze()) {
-                        Log.trace("ERROR:!facility_analyzer.analyze()");
-                        break;
+                        // Blank facility regions are common after the in-game not-stationed filter is active.
+                        // Without that filter, failing open could move an already stationed operator.
+                        if (m_notstationed_filter_active) {
+                            Log.trace("facility OCR failed, assume not stationed (filter active)");
+                            is_not_stationed = true;
+                        }
+                        else {
+                            Log.trace("skip trust autofill candidate: facility OCR failed");
+                            continue;
+                        }
+                    }
+                    else {
+                        std::string facility_name = facility_analyzer.get_result().text;
+                        boost::regex facility_rule("[^BF0-9]");
+                        facility_name = boost::regex_replace(facility_name, facility_rule, "");
+                        Log.trace("facility_name:<" + facility_name + ">");
+                        is_not_stationed = facility_name.length() < ActiveFacilityNumberLength;
                     }
 
-                    std::string facility_name = facility_analyzer.get_result().text;
-                    boost::regex facility_rule("[^BF0-9]");
-                    facility_name = boost::regex_replace(facility_name, facility_rule, "");
-
-                    Log.trace("facility_name:<" + facility_name + ">");
-                    const bool is_not_stationed = facility_name.length() < ActiveFacilityNumberLength;
-
                     if (has_incomplete_trust && is_not_stationed) {
-                        ctrler()->click(oper.rect);
-                        ++num_of_selected;
+                        if (num_of_selected < max_num_of_opers()) {
+                            ctrler()->click(oper.rect);
+                            ++num_of_selected;
+                        }
+                        else {
+                            // The current room is full, but another eligible low-trust operator
+                            // proves that the next dorm must still use the destructive trust pass.
+                            trust_has_more = true;
+                            Log.info("trust autofill probe found another eligible operator");
+                            break;
+                        }
                     }
                     else {
                         Log.trace("skip trust autofill candidate");
@@ -374,8 +448,6 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                     ++num_of_resting >= RestingOperCountThreshold && m_selection_phase != SelectionPhase::LowMood) {
                     Log.trace("num_of_resting:", num_of_resting, ", dorm finished");
                     if (m_trust_autofill_enabled) {
-                        // We have exhausted the low-mood pass on this page. Switch to the
-                        // trust-autofill view and let the next iteration re-read the list.
                         switch_to_trust_autofill_phase();
                     }
                     else {
@@ -386,7 +458,8 @@ bool asst::InfrastDormTask::fill_dorm_slots()
 
             case infrast::SmileyType::Work:
             case infrast::SmileyType::Distract:
-                if (!oper.selected && oper.doing != infrast::Doing::Working) {
+                if (num_of_selected < max_num_of_opers() && !oper.selected &&
+                    oper.doing != infrast::Doing::Working) {
                     ctrler()->click(oper.rect);
                     ++num_of_selected;
                 }
@@ -397,7 +470,7 @@ bool asst::InfrastDormTask::fill_dorm_slots()
             }
 
             // Sorting changes the visible list order, so stop this pass and OCR again.
-            if (m_selection_phase == SelectionPhase::ResortForTrust) {
+            if (m_selection_phase == SelectionPhase::ResortForTrust || trust_has_more) {
                 break;
             }
 
@@ -405,6 +478,54 @@ bool asst::InfrastDormTask::fill_dorm_slots()
                 swipe_of_operlist();
                 break;
             }
+        }
+
+        if (m_selection_phase == SelectionPhase::TrustAutofill) {
+            const auto decision = infrast::decide_trust_page(
+                num_of_selected >= max_num_of_opers(),
+                trust_page_saw_full_trust,
+                trust_has_more,
+                trust_page_has_unresolved_trust);
+
+            if (decision == infrast::TrustPageDecision::MoreMayRemain) {
+                Log.info("trust autofill stops on current page; more low-trust operators may remain");
+                break;
+            }
+
+            if (decision == infrast::TrustPageDecision::Exhausted) {
+                Log.info("trust autofill pool exhausted on current page after pages:", trust_pages_scanned);
+                m_trust_pool_exhausted = true;
+                m_selection_phase = SelectionPhase::FillRemaining;
+                fill_remaining_slots = true;
+
+                if (!switch_to_mood_sort()) {
+                    return false;
+                }
+
+                if (num_of_selected >= max_num_of_opers()) {
+                    break;
+                }
+                continue;
+            }
+
+            if (trust_pages_scanned >= MaxTrustScanPages) {
+                // Fail safe for unusual cases where every scanned entry is still below 200
+                // (or trust OCR remains unresolved) while the room is not yet full.
+                // Do not claim global exhaustion; fill only this room normally.
+                Log.warn("trust autofill scan reached safety page limit without a full-trust boundary");
+                m_selection_phase = SelectionPhase::FillRemaining;
+                fill_remaining_slots = true;
+                if (!switch_to_mood_sort()) {
+                    return false;
+                }
+                if (num_of_selected >= max_num_of_opers()) {
+                    break;
+                }
+                continue;
+            }
+
+            swipe_of_operlist();
+            continue;
         }
 
         if (num_of_selected >= max_num_of_opers()) {
@@ -442,6 +563,19 @@ bool asst::InfrastDormTask::fill_dorm_slots()
     }
 
     return true;
+}
+
+
+std::optional<size_t> asst::InfrastDormTask::current_selected_count()
+{
+    InfrastOperImageAnalyzer analyzer(ctrler()->get_image());
+    analyzer.set_to_be_calced(InfrastOperImageAnalyzer::ToBeCalced::Selected);
+    if (!analyzer.analyze()) {
+        Log.warn("failed to count selected dorm operators");
+        return std::nullopt;
+    }
+    return static_cast<size_t>(
+        std::ranges::count_if(analyzer.get_result(), std::mem_fn(&infrast::Oper::selected)));
 }
 
 bool asst::InfrastDormTask::select_dorm_managers()
@@ -493,14 +627,22 @@ bool asst::InfrastDormTask::should_select_dorm_managers() const noexcept
 
 bool asst::InfrastDormTask::run_fiammetta_preparation()
 {
-    const FiammettaSelectionResult selection_result = m_fiammetta_checked || m_fiammetta_targets.empty()
-                                                          ? FiammettaSelectionResult::NotFound
-                                                          : try_select_fiammetta_pair();
+    if (m_fiammetta_targets.empty()) {
+        if (!click_confirm_button()) {
+            return false;
+        }
+        click_return_button();
+        return true;
+    }
+    const FiammettaSelectionResult selection_result =
+        m_fiammetta_checked ? FiammettaSelectionResult::NotFound : try_select_fiammetta_pair();
     if (selection_result == FiammettaSelectionResult::Error) {
         return false;
     }
-    if (!click_confirm_button()) {
-        return false;
+    if (selection_result == FiammettaSelectionResult::Selected) {
+        if (!click_confirm_button()) {
+            return false;
+        }
     }
     click_return_button();
     return true;
@@ -508,42 +650,14 @@ bool asst::InfrastDormTask::run_fiammetta_preparation()
 
 asst::InfrastDormTask::FiammettaSelectionResult asst::InfrastDormTask::try_select_fiammetta_pair()
 {
-    // 菲亚梅塔可能在其他设施工作，配对需要从“全部”列表里找到她，先把筛选恢复为“全部”
+    // 对齐官方：先恢复全部筛选，确保可查到在其他设施进驻的配对干员。
     if (!ensure_notstationed_filter_off()) {
         return FiammettaSelectionResult::Error;
     }
-
-    // 先确认配对二人都在场，任一不在场直接结束；都在场才清空保存重进点选。
+    m_notstationed_filter_active = false;
     m_fiammetta_checked = true;
-    std::vector<infrast::Oper> target_opers;
-    const DetectResult target_detect = detect_fiammetta_target(target_opers);
-    if (target_detect != DetectResult::Found) {
-        return target_detect == DetectResult::Error ? FiammettaSelectionResult::Error
-                                                    : FiammettaSelectionResult::NotFound;
-    }
-
-    // 菲亚梅塔只在满心情时技能才有作用，按技能排序必然在第一页。
-    if (!ProcessTask(*this, { "InfrastOperListTabSkillUnClicked" }).run()) {
-        return FiammettaSelectionResult::Error;
-    }
-    std::vector<infrast::Oper> fiammetta_opers;
-    const DetectResult fiammetta_detect = detect_full_mood_fiammetta(fiammetta_opers);
-    if (fiammetta_detect != DetectResult::Found) {
-        if (fiammetta_detect == DetectResult::NotFound) {
-            Log.warn("full-mood Fiammetta was not found on the first page");
-        }
-        if (!switch_to_low_mood_sort()) {
-            return FiammettaSelectionResult::Error;
-        }
-        return fiammetta_detect == DetectResult::Error ? FiammettaSelectionResult::Error
-                                                       : FiammettaSelectionResult::NotFound;
-    }
-
-    // 清空保存取消全部选中并消除置顶，重进后重新识别定位，不复用旧坐标。
-    if (!click_clear_button()) {
-        return FiammettaSelectionResult::Error;
-    }
-    if (!click_confirm_button()) {
+    LogInfo << "Fiammetta preparation: clearing dorm before selection";
+    if (!click_clear_button() || !click_confirm_button()) {
         return FiammettaSelectionResult::Error;
     }
     click_return_button();
@@ -554,105 +668,228 @@ asst::InfrastDormTask::FiammettaSelectionResult asst::InfrastDormTask::try_selec
     if (!switch_to_low_mood_sort()) {
         return FiammettaSelectionResult::Error;
     }
+    LogInfo << "Fiammetta dorm cleared and re-entered";
 
+    for (const auto& target : m_fiammetta_targets) {
+        LogInfo << "Configured Fiammetta target:" << target << "threshold:" << m_mood_threshold;
+    }
+    std::vector<infrast::Oper> target_opers;
+    std::string selected_target_name;
+    const DetectResult target_detect = detect_fiammetta_target(target_opers, selected_target_name);
+    if (target_detect != DetectResult::Found) {
+        if (target_detect == DetectResult::Error) {
+            LogError << "Fiammetta target scan failed";
+            return FiammettaSelectionResult::Error;
+        }
+        LogInfo << "Fiammetta recovery skipped: no eligible configured target";
+        return FiammettaSelectionResult::NotFound;
+    }
     // 点选顺序决定进驻顺序，菲亚梅塔必须在目标后一位。
-    target_opers.clear();
-    if (detect_fiammetta_target(target_opers) != DetectResult::Found) {
-        return FiammettaSelectionResult::Error;
+    if (infrast::fiammetta_target_needs_relocation(m_fiammetta_targets.size())) {
+        target_opers.clear();
+        if (detect_fiammetta_target(target_opers, selected_target_name, selected_target_name) != DetectResult::Found) {
+            return FiammettaSelectionResult::Error;
+        }
     }
     ctrler()->click(target_opers.front().rect);
+    LogInfo << "Fiammetta target selected:" << selected_target_name;
     if (!ProcessTask(*this, { "InfrastOperListTabSkillUnClicked" }).run()) {
+        click_clear_button();
         discard_pending_selection();
         return FiammettaSelectionResult::Error;
     }
-    fiammetta_opers.clear();
-    if (detect_full_mood_fiammetta(fiammetta_opers) != DetectResult::Found) {
+    std::vector<infrast::Oper> fiammetta_opers;
+    const DetectResult fiammetta_detect = detect_full_mood_fiammetta(fiammetta_opers);
+    if (fiammetta_detect != DetectResult::Found) {
+        const bool cleared = click_clear_button();
         discard_pending_selection();
-        return FiammettaSelectionResult::Error;
+        if (!cleared || fiammetta_detect == DetectResult::Error) {
+            return FiammettaSelectionResult::Error;
+        }
+        LogInfo << "Fiammetta recovery skipped: full-mood Fiammetta not found";
+        return FiammettaSelectionResult::NotFound;
     }
     ctrler()->click(fiammetta_opers.front().rect);
     const auto& id_opt = BattleData.get_first_id(battle::Role::Sniper, "菲亚梅塔");
     if (id_opt) {
         stage_operator_selection(*id_opt);
     }
+    LogInfo << "Fiammetta pair selected";
     return FiammettaSelectionResult::Selected;
 }
 
-asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_fiammetta_target(std::vector<infrast::Oper>& opers)
+asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_fiammetta_target(
+    std::vector<infrast::Oper>& opers,
+    std::string& chosen_name,
+    std::string_view desired_name)
 {
-    // 只识别当前第一页：恢复目标按低心情升序必然落在第一页。
-    InfrastOperImageAnalyzer analyzer(ctrler()->get_image());
-    analyzer.set_to_be_calced(InfrastOperImageAnalyzer::ToBeCalced::All);
-    analyzer.set_facility(facility_name());
-    if (!analyzer.analyze()) {
-        Log.error("fiammetta target analyze failed");
-        return DetectResult::Error;
-    }
-    opers = analyzer.get_result();
-
-    std::vector<infrast::DormSelectionCandidate> candidates;
-    candidates.reserve(opers.size());
-    for (const auto& oper : opers) {
-        infrast::DormSelectionCandidate candidate {
-            .operator_id = oper.operator_id,
-            .mood_ratio = oper.mood_ratio,
-            .selected = oper.selected,
-            // 菲亚梅塔目标可能正在其他设施工作，识别阶段仍应允许将其选中。
-            .available = true,
-        };
-        if (!candidate.selected && candidate.available && candidate.mood_ratio < m_mood_threshold) {
+    constexpr size_t MaxPages = 30;
+    swipe_to_the_left_of_operlist();
+    const int face_hash_threshold = Task.get("InfrastOperFace")->special_params[0];
+    std::vector<std::string> seen_faces;
+    infrast::FiammettaTargetChoice choice(m_fiammetta_targets, m_mood_threshold);
+    infrast::DormPageProgress progress;
+    size_t pages_scanned = 0;
+    for (size_t page = 0; page < MaxPages; ++page) {
+        if (need_exit()) {
+            return DetectResult::Error;
+        }
+        InfrastOperImageAnalyzer analyzer(ctrler()->get_image());
+        analyzer.set_to_be_calced(InfrastOperImageAnalyzer::ToBeCalced::All);
+        analyzer.set_facility(facility_name());
+        if (!analyzer.analyze()) {
+            LogError << "Fiammetta target page analysis failed:" << page;
+            return DetectResult::Error;
+        }
+        opers = analyzer.get_result();
+        pages_scanned = page + 1;
+        size_t new_faces = 0;
+        for (size_t index = 0; index < opers.size(); ++index) {
+            const auto& oper = opers[index];
+            if (!oper.face_hash.empty() && std::ranges::none_of(seen_faces, [&](const std::string& hash) {
+                    return Hasher::hamming(hash, oper.face_hash) < face_hash_threshold;
+                })) {
+                seen_faces.emplace_back(oper.face_hash);
+                ++new_faces;
+            }
+            if (oper.selected) {
+                continue;
+            }
             RegionOCRer name_analyzer(oper.name_img);
-            name_analyzer.set_replace(
-                Task.get<OcrTaskInfo>("CharsNameOcrReplace")->replace_map,
-                Task.get<OcrTaskInfo>("CharsNameOcrReplace")->replace_full);
-            if (auto name = name_analyzer.analyze()) {
-                candidate.name = name->text;
+            const auto& replace_task = Task.get<OcrTaskInfo>("CharsNameOcrReplace");
+            name_analyzer.set_replace(replace_task->replace_map, replace_task->replace_full);
+            const auto name = name_analyzer.analyze();
+            if (!name) {
+                continue;
+            }
+            if (!desired_name.empty() && name->text != desired_name) {
+                continue;
+            }
+            const size_t recognized_before = choice.recognized_count();
+            const bool new_best = choice.consider(name->text, oper.mood_ratio);
+            if (choice.recognized_count() == recognized_before) {
+                continue;
+            }
+            LogInfo << "Fiammetta configured target recognized:" << name->text << "mood:" << oper.mood_ratio
+                    << "page:" << page << "eligible:" << (oper.mood_ratio < m_mood_threshold);
+            if (new_best) {
+                chosen_name = name->text;
+                if (!desired_name.empty()) {
+                    std::swap(opers.front(), opers[index]);
+                    return DetectResult::Found;
+                }
+            }
+            if (desired_name.empty() && choice.is_complete()) {
+                LogInfo << "Fiammetta target scan complete:"
+                        << (m_fiammetta_targets.size() == 1 ? "single configured target resolved"
+                                                            : "all configured targets resolved")
+                        << "page:" << page << "pages scanned:" << (page + 1);
+                if (!choice.name().empty()) {
+                    LogInfo << "Fiammetta target selected:" << choice.name() << "mood:" << choice.mood();
+                    if (!infrast::fiammetta_target_needs_relocation(m_fiammetta_targets.size())) {
+                        std::swap(opers.front(), opers[index]);
+                    }
+                    return DetectResult::Found;
+                }
+                LogInfo << "Fiammetta target scan complete: no target below mood threshold:" << m_mood_threshold;
+                return DetectResult::NotFound;
             }
         }
-        candidates.emplace_back(std::move(candidate));
+        LogInfo << "Fiammetta target scan page:" << page << "new faces:" << new_faces;
+        if (progress.reached_end(new_faces)) {
+            LogInfo << "Fiammetta target scan reached repeated pages:" << page;
+            break;
+        }
+        swipe_of_operlist();
     }
-
-    const auto target_index = infrast::find_fiammetta_target(candidates, m_fiammetta_targets, m_mood_threshold);
-    if (!target_index) {
-        return DetectResult::NotFound;
+    if (desired_name.empty() && !chosen_name.empty()) {
+        LogInfo << "Fiammetta target selected:" << chosen_name << "mood:" << choice.mood()
+                << "pages scanned:" << pages_scanned;
+        return DetectResult::Found;
     }
-    // 把命中的干员挪到首位，供调用方直接点选。
-    std::swap(opers.front(), opers[*target_index]);
-    return DetectResult::Found;
+    LogInfo << "Fiammetta target not found below mood threshold:" << m_mood_threshold
+            << "pages scanned:" << pages_scanned;
+    return DetectResult::NotFound;
 }
 
 asst::InfrastDormTask::DetectResult asst::InfrastDormTask::detect_full_mood_fiammetta(std::vector<infrast::Oper>& opers)
 {
-    // 只识别当前第一页：满心情菲亚梅塔按技能排序必然落在第一页。
-    InfrastOperImageAnalyzer analyzer(ctrler()->get_image());
-    analyzer.set_to_be_calced(InfrastOperImageAnalyzer::ToBeCalced::All);
-    analyzer.set_facility(facility_name());
-    if (!analyzer.analyze()) {
-        Log.error("full-mood fiammetta analyze failed");
-        return DetectResult::Error;
+    constexpr size_t MaxPages = 30;
+    swipe_to_the_left_of_operlist();
+    const int face_hash_threshold = Task.get("InfrastOperFace")->special_params[0];
+    std::vector<std::string> seen_faces;
+    infrast::DormPageProgress progress;
+    for (size_t page = 0; page < MaxPages; ++page) {
+        if (need_exit()) {
+            return DetectResult::Error;
+        }
+        InfrastOperImageAnalyzer analyzer(ctrler()->get_image());
+        analyzer.set_to_be_calced(InfrastOperImageAnalyzer::ToBeCalced::All);
+        analyzer.set_facility(facility_name());
+        if (!analyzer.analyze()) {
+            LogError << "Full-mood Fiammetta page analysis failed:" << page;
+            return DetectResult::Error;
+        }
+        opers = analyzer.get_result();
+        std::vector<infrast::DormSelectionCandidate> candidates;
+        candidates.reserve(opers.size());
+        size_t new_faces = 0;
+        for (const auto& oper : opers) {
+            if (!oper.face_hash.empty() && std::ranges::none_of(seen_faces, [&](const std::string& hash) {
+                    return Hasher::hamming(hash, oper.face_hash) < face_hash_threshold;
+                })) {
+                seen_faces.emplace_back(oper.face_hash);
+                ++new_faces;
+            }
+            candidates.emplace_back(
+                infrast::DormSelectionCandidate {
+                    .operator_id = oper.operator_id,
+                    .mood_ratio = oper.mood_ratio,
+                    .selected = oper.selected,
+                    .available = true,
+                });
+        }
+        if (const auto index = infrast::find_full_mood_fiammetta(candidates)) {
+            LogInfo << "Full-mood Fiammetta found on page:" << page << "mood:" << opers[*index].mood_ratio;
+            std::swap(opers.front(), opers[*index]);
+            return DetectResult::Found;
+        }
+        LogInfo << "Full-mood Fiammetta scan page:" << page << "new faces:" << new_faces;
+        if (progress.reached_end(new_faces)) {
+            LogInfo << "Full-mood Fiammetta scan reached repeated pages:" << page;
+            break;
+        }
+        swipe_of_operlist();
     }
-    opers = analyzer.get_result();
+    LogInfo << "Full-mood Fiammetta not found after scanning operator list";
+    return DetectResult::NotFound;
+}
 
-    std::vector<infrast::DormSelectionCandidate> candidates;
-    candidates.reserve(opers.size());
-    for (const auto& oper : opers) {
-        candidates.emplace_back(
-            infrast::DormSelectionCandidate {
-                .operator_id = oper.operator_id,
-                .mood_ratio = oper.mood_ratio,
-                .selected = oper.selected,
-                // 保持“全部”筛选，满心情菲亚梅塔也可能正在其他设施工作。
-                .available = true,
-            });
+bool asst::InfrastDormTask::set_notstationed_filter(bool enabled)
+{
+    // 不做 early-return：即使内存标志认为筛选已处于目标状态，也必须每间宿舍
+    // 都去 UI 上复查一遍。正常跨宿舍时游戏会保持筛选设置，但如果模拟器卡顿
+    // 导致误点两次返回、退出到主界面后再重新进入基建，游戏会丢失筛选状态，
+    // 此时内存标志仍为旧值，跳过 UI 操作会导致筛选实际未生效，从而把训练室
+    // 等已进驻干员选进宿舍。
+    // 底层 click_filter_menu_not_stationed_button() 已能幂等处理「已选中」
+    // 状态（识别 InfrastFilterMenuNotStationedSelected 后直接 Stop），所以
+    // 每次都真正执行是安全的，不会对已选中的「未进驻」二次点击。
+    bool success = false;
+    if (enabled) {
+        Log.trace("click_filter_menu_not_stationed_button");
+        success = click_filter_menu_not_stationed_button();
+    }
+    else {
+        Log.trace("click_filter_menu_cancel_not_stationed_button");
+        success = click_filter_menu_cancel_not_stationed_button();
     }
 
-    const auto fiammetta_index = infrast::find_full_mood_fiammetta(candidates);
-    if (!fiammetta_index) {
-        return DetectResult::NotFound;
+    if (success) {
+        m_notstationed_filter_active = enabled;
     }
-    // 把命中的干员挪到首位，供调用方直接点选。
-    std::swap(opers.front(), opers[*fiammetta_index]);
-    return DetectResult::Found;
+
+    return success;
 }
 
 bool asst::InfrastDormTask::restore_list_sort_for_selection_phase(asst::infrast::CustomRoomConfig const& room_config)
@@ -690,10 +927,12 @@ bool asst::InfrastDormTask::switch_to_low_mood_sort()
 void asst::InfrastDormTask::switch_to_trust_autofill_phase()
 {
     Log.trace("m_trust_autofill_enabled:", m_trust_autofill_enabled);
-    // 信赖补位只从未进驻干员里选低信赖的，与 m_notstationed_filter_enabled 无关，无条件开筛选
-    click_filter_menu_not_stationed_button();
+    set_notstationed_filter(true);
     Log.trace("click_sort_by_trust_button");
     click_sort_by_trust_button();
+    // Exhaustion is now determined by scanning to repeated pages, so always start the
+    // trust-ordered scan from the beginning of the operator list.
+    swipe_to_the_left_of_operlist();
     m_selection_phase = SelectionPhase::ResortForTrust;
 }
 
