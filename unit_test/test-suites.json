@@ -14,6 +14,16 @@
         "src/MaaCore/Utils/Algorithm.hpp",
         "unit_test/MaaCore/AlgorithmTest.cpp"
       ]
+    },
+    {
+      "id": "maa-recruit-minimum-test",
+      "name": "Recruit minimum guarantee",
+      "buildTarget": "maa-recruit-minimum-test",
+      "ctestRegex": "^recruit-minimum::",
+      "paths": [
+        "src/MaaCore/Task/Miscellaneous/RecruitMinimumGuarantee.h",
+        "unit_test/MaaCore/RecruitMinimumGuaranteeTest.cpp"
+      ]
     }
   ]
 }
