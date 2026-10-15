@@ -530,6 +530,12 @@ Rotation では `game` がゲーム内ローテーションを使い、`station_
 @optional
 貿易所の ｢源石の欠片｣ を自動補充するかどうか。  
 :::  
+::: field collect  
+@type boolean
+@default true
+@optional
+基地への入場直後に、製造所・貿易所・回収所の生産物やオペレーターの信頼度など、一括受取の対象を独立して一度だけ受け取ります。既存設定との互換性のため初期値は true です。  
+:::  
 ::: field dorm_notstationed_enabled  
 @type boolean
 @default false
