@@ -3,6 +3,7 @@
 #include <random>
 
 #include "Config/TaskData.h"
+#include "Status.h"
 #include "Task/ProcessTask.h"
 #include "Utils/Logger.hpp"
 #include "Utils/StringMisc.hpp"
@@ -18,6 +19,7 @@ bool asst::SwitchThemeTask::set_params(const json::value& params)
     LogTraceFunction;
 
     m_candidates.clear();
+    m_only_if_fallback = params.get("only_if_fallback", false);
     auto themes_opt = params.find("themes");
     if (!themes_opt) {
         Log.error("SwitchThemeTask: no themes in params");
@@ -52,6 +54,14 @@ bool asst::SwitchThemeTask::run()
     if (m_candidates.empty()) {
         Log.info("no candidate theme, skip");
         json::value skip_info = basic_info_with_what("SwitchThemeSkipped");
+        callback(AsstMsg::SubTaskExtraInfo, skip_info);
+        return true;
+    }
+
+    if (m_only_if_fallback && status()->get_number(Status::UiThemeFallbackTriggered).value_or(0) == 0) {
+        Log.info("no automatic UI theme fallback in this task batch, skip conditional restore");
+        json::value skip_info = basic_info_with_what("SwitchThemeSkipped");
+        skip_info["details"]["reason"] = "NoThemeFallback";
         callback(AsstMsg::SubTaskExtraInfo, skip_info);
         return true;
     }
@@ -133,5 +143,10 @@ bool asst::SwitchThemeTask::run()
         return false;
     }
     Log.info("theme switch flow done:", target);
+    if (m_only_if_fallback) {
+        // Consume the marker only after a successful restore flow. If the target cannot be
+        // found/used, keep it set so a later conditional restore task in the same batch may retry.
+        status()->set_number(Status::UiThemeFallbackTriggered, 0);
+    }
     return true;
 }

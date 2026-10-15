@@ -40,6 +40,7 @@ public:
     static inline const std::string InfrastAvailableOpersForGroup = "InfrastAvailableOpersForGroup";
 
     static inline const std::string ProcessTaskLastTimePrefix = "#LastTime#";
+    static inline const std::string UiThemeFallbackTriggered = "UiThemeFallbackTriggered";
 
 private:
     std::unordered_map<std::string, int64_t> m_number;

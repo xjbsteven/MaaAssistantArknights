@@ -383,6 +383,14 @@ ProcessTask::NodeStatus ProcessTask::run_task(const HitDetail& hits)
         return result;
     }
 
+    // The legacy SwitchTheme chain is the automatic unsupported-theme fallback used by
+    // main-screen entry recognition. Record it only after the confirm click actually runs.
+    // Explicit SwitchThemeTask uses SwitchThemeByNameConfirmTheme and must not set this flag.
+    if (task_name.ends_with("SwitchTheme@ConfirmThemeChange")) {
+        Log.info("automatic UI theme fallback confirmed");
+        status()->set_number(Status::UiThemeFallbackTriggered, 1);
+    }
+
     status()->set_number(Status::ProcessTaskLastTimePrefix + task_name, time(nullptr));
 
     // 减少其他任务的执行次数

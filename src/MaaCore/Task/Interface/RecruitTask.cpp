@@ -50,6 +50,13 @@ bool asst::RecruitTask::set_params(const json::value& params)
     bool force_refresh = params.get("force_refresh", true);
     int level3_recruitment_permit_reserve = params.get("level3_recruitment_permit_reserve", 0);
     int times = params.get("times", 0);
+    const auto configured_minimum = params.find<int>("minimum_recruit_times");
+    const bool legacy_force_confirm = params.get("force_confirm_to_meet_times", false);
+    const int minimum_recruit_times =
+        recruit::normalize_minimum_recruit_times(times, configured_minimum, legacy_force_confirm);
+    if (!configured_minimum && legacy_force_confirm) {
+        LogWarn << "'force_confirm_to_meet_times' is deprecated; use 'minimum_recruit_times' instead.";
+    }
     bool expedite = params.get("expedite", false);
     [[maybe_unused]] int expedite_times = params.get("expedite_times", 0);
     std::vector<RecruitConfig::TagId> preserve_tags;
@@ -82,6 +89,7 @@ bool asst::RecruitTask::set_params(const json::value& params)
     m_auto_recruit_task_ptr->set_enable(true);
 
     m_auto_recruit_task_ptr->set_max_times(times)
+        .set_minimum_recruit_times(minimum_recruit_times)
         .set_need_refresh(refresh)
         .set_use_expedited(expedite)
         .set_select_extra_tags(extra_tags_mode)
