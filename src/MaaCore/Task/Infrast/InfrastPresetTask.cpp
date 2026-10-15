@@ -84,7 +84,8 @@ const std::vector<asst::InfrastPresetTask::RoomInfo>& all_room_infos()
         for (int i = 1; i <= MaxPowerIndex; ++i) {
             rooms.emplace_back("Power" + std::to_string(i), "发电站" + std::to_string(i), order++);
         }
-        rooms.emplace_back("Office", "办公室", order);
+        rooms.emplace_back("Office", "办公室", order++);
+        rooms.emplace_back("Recycle", "回收站", order);
         return rooms;
     }();
     return Rooms;
@@ -100,6 +101,7 @@ std::string normalize_room_id(std::string id)
             { "RECEPTION", "Reception" },
             { "MEETING", "Reception" },
             { "OFFICE", "Office" },
+            { "RECYCLE", "Recycle" },
         };
         for (int i = 1; i <= MaxMfgIndex; ++i) {
             const std::string index = std::to_string(i);
@@ -143,13 +145,14 @@ const std::vector<NumberedTypeInfo>& numbered_types()
     return Types;
 }
 
-// 无编号的固定设施，OCR 一般稳定，直接精确匹配即可。
+// 无编号的固定设施（含回收站），OCR 一般稳定，直接精确匹配即可。
 const std::vector<std::pair<std::string, std::string>>& fixed_rooms()
 {
     static const std::vector<std::pair<std::string, std::string>> Rooms = {
         { "Control", "控制中枢" },
         { "Reception", "会客室" },
         { "Office", "办公室" },
+        { "Recycle", "回收站" },
     };
     return Rooms;
 }
