@@ -531,6 +531,12 @@ Tag 等级（大于等于 3）和对应的希望招募时限，单位为分钟�
 @optional
 贸易站“源石碎片”是否自动补货。  
 :::  
+::: field collect  
+@type boolean
+@default true
+@optional
+进入基建后独立执行一次一键收获，包括当前支持的制造站、贸易站、回收站材料和干员信赖等全部奖励。默认开启，以兼容旧配置；关闭后导航不再自动收取。  
+:::  
 ::: field dorm_notstationed_enabled  
 @type boolean
 @default false
