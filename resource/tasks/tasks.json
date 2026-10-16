@@ -2517,7 +2517,6 @@
         "algorithm": "JustReturn",
         "next": [
             "Infrast",
-            "InfrastNotification",
             "InfrastEnteredFlag",
             "InfrastBegin@InfrastLoading",
             "(Infrast@MainThemes)@QuickSwitch@ToInfrast#next",
@@ -2921,8 +2920,12 @@
         "template": "InfrastOverview.png",
         "templThreshold": 0.95,
         "roi": [0, 100, 300, 150],
-        "next": ["InfrastNotification", "Stop"],
+        "next": ["Stop"],
         "postDelay": 5000
+    },
+    "InfrastCollect": {
+        "algorithm": "JustReturn",
+        "next": ["InfrastNotification", "Stop"]
     },
     "InfrastNotification": {
         "roi": [1100, 0, 180, 300],

@@ -516,6 +516,12 @@ Rotation에서 `game`은 게임 내 로테이션을 사용하고 `station_preset
 @optional
 무역소 "오리지늄 조각" 자동 보충 여부  
 :::  
+::: field collect  
+@type boolean
+@default true
+@optional
+기지 진입 직후 드론이나 보충 작업과 독립적으로 생산물, 회수 시설 자재 및 오퍼레이터 신뢰도 등 일괄 수령 대상 보상을 한 번 수령합니다. 기존 설정 호환을 위해 기본값은 true입니다.  
+:::  
 ::: field dorm_notstationed_enabled  
 @type boolean
 @default false

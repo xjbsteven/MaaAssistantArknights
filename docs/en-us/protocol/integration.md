@@ -530,6 +530,12 @@ This field is ignored when `mode = 20000`.
 @optional
 Whether to replenish Originium Shard in trading post.  
 :::  
+::: field collect  
+@type boolean
+@default true
+@optional
+Collect all rewards supported by the base overview's one-click collection once, immediately after entering the base, independently of drones or replenishment. Defaults to true for existing configurations; navigation alone will not collect when disabled.  
+:::  
 ::: field dorm_notstationed_enabled  
 @type boolean
 @default false
