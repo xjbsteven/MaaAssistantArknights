@@ -2938,7 +2938,7 @@
         "Doc": "回收站材料产出收取会弹出获得物资遮罩，需额外点击一次才能继续普通一键收获。",
         "algorithm": "OcrDetect",
         "text": ["材料产出"],
-        "action": "ClickSelf",
+        "action": "ClickSelfRecord",
         "roi": [0, 600, 800, 118],
         "postDelay": 1500,
         "maxTimes": 3,
@@ -2956,10 +2956,9 @@
         "next": ["InfrastRecycleReward", "InfrastReward", "InfrastReward@LoadingText", "InfrastExitReward"]
     },
     "InfrastRecycleRewardFallback": {
-        "Doc": "尚无回收站领取弹窗实测截图：OCR 未识别获得物资时，仅在材料产出收取后点击右侧预设空白位置一次；后续以截图校准。",
+        "Doc": "回收站产物弹窗尚无实测截图：找不到｢获得物资｣时，在刚刚 OCR 识别到的｢材料产出｣实际点击坐标复点一次，不使用固定坐标、避免误入设置。",
         "algorithm": "JustReturn",
-        "action": "ClickRect",
-        "specificRect": [1050, 450, 1, 1],
+        "action": "ClickRecorded",
         "postDelay": 1000,
         "next": ["InfrastRecycleReward", "InfrastReward", "InfrastReward@LoadingText", "InfrastExitReward"]
     },
