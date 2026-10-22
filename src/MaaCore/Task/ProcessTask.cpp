@@ -150,6 +150,9 @@ bool ProcessTask::run()
 {
     LogTraceFunction;
 
+    // Never reuse a recorded click from an earlier invocation of the same ProcessTask.
+    m_recorded_click_point.reset();
+
     if (!m_enable) {
         Log.info("task disabled, pass", basic_info().to_string());
         return true;
@@ -292,7 +295,7 @@ ProcessTask::HitDetail ProcessTask::find_first(const TaskList& list) /* const, e
 }
 
 // action 为 Stop 时返回 Interrupted, 其它返回 Success
-ProcessTask::NodeStatus ProcessTask::run_action(const HitDetail& hits) const
+ProcessTask::NodeStatus ProcessTask::run_action(const HitDetail& hits)
 {
     const auto& task = hits.task_ptr;
     switch (task->action) {
@@ -307,6 +310,26 @@ ProcessTask::NodeStatus ProcessTask::run_action(const HitDetail& hits) const
         exec_click_task(rect);
         return NodeStatus::Success;
     }
+    case ProcessTaskAction::ClickSelfRecord: {
+        Rect rect = hits.rect;
+        if (const auto& res_move = task->rect_move; !res_move.empty()) {
+            rect = rect.move(res_move);
+        }
+        // ControlScaleProxy::click(Rect) randomizes the click point on every call.
+        // Generate the point just once so ClickRecorded can tap that exact point.
+        const Point point = rand_point_in_rect(rect);
+        m_recorded_click_point = point;
+        ctrler()->click(point);
+        return NodeStatus::Success;
+    }
+    case ProcessTaskAction::ClickRecorded:
+        if (m_recorded_click_point.has_value()) {
+            ctrler()->click(*m_recorded_click_point);
+        }
+        else {
+            LogWarn << "ClickRecorded has no click position in this ProcessTask run:" << task->name;
+        }
+        return NodeStatus::Success;
     case ProcessTaskAction::Input: {
         exec_input_task(task->input_text);
         return NodeStatus::Success;
