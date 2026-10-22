@@ -567,7 +567,9 @@ enum class ProcessTaskAction
     BasicClick = 0x100,
     ClickSelf = BasicClick | 1, // 点击自身位置
     ClickRect = BasicClick | 2, // 点击指定区域
-    // ClickRand = BasicClick | 4, // 点击随机区域
+    ClickSelfRecord = BasicClick | 3, // 点击自身识别位置，并记录本次实际点击坐标
+    ClickRecorded = BasicClick | 4, // 复点该 ProcessTask 最近一次记录的真实坐标
+    // ClickRand = BasicClick | 8, // 点击随机区域
     DoNothing = 0x200, // 什么都不做
     Stop = 0x400,      // 停止当前Task
     Swipe = 0x1000,    // 滑动
@@ -580,6 +582,8 @@ inline ProcessTaskAction get_action_type(std::string action_str)
     static const std::unordered_map<std::string, ProcessTaskAction> action_map = {
         { "", ProcessTaskAction::DoNothing },          { "donothing", ProcessTaskAction::DoNothing },
         { "clickself", ProcessTaskAction::ClickSelf }, { "clickrect", ProcessTaskAction::ClickRect },
+        { "clickselfrecord", ProcessTaskAction::ClickSelfRecord },
+        { "clickrecorded", ProcessTaskAction::ClickRecorded },
         { "stop", ProcessTaskAction::Stop },           { "swipe", ProcessTaskAction::Swipe },
         { "input", ProcessTaskAction::Input },
     };
@@ -594,7 +598,10 @@ inline std::string enum_to_string(ProcessTaskAction action)
     static const std::unordered_map<ProcessTaskAction, std::string> action_map = {
         { ProcessTaskAction::Invalid, "Invalid" },       { ProcessTaskAction::DoNothing, "DoNothing" },
         { ProcessTaskAction::BasicClick, "BasicClick" }, { ProcessTaskAction::ClickSelf, "ClickSelf" },
-        { ProcessTaskAction::ClickRect, "ClickRect" },   { ProcessTaskAction::Stop, "Stop" },
+        { ProcessTaskAction::ClickRect, "ClickRect" },
+        { ProcessTaskAction::ClickSelfRecord, "ClickSelfRecord" },
+        { ProcessTaskAction::ClickRecorded, "ClickRecorded" },
+        { ProcessTaskAction::Stop, "Stop" },
         { ProcessTaskAction::Swipe, "Swipe" },           { ProcessTaskAction::Input, "Input" },
     };
     if (auto it = action_map.find(action); it != action_map.end()) {
