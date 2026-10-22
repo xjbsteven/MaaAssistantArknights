@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <unordered_map>
 
 #include "AbstractTask.h"
@@ -69,7 +70,7 @@ protected:
     virtual json::value basic_info() const override;
 
     HitDetail find_first(const TaskList& list);
-    NodeStatus run_action(const HitDetail& hits) const;
+    NodeStatus run_action(const HitDetail& hits);
     NodeStatus run_task(const HitDetail& hits);
     std::pair<NodeStatus, TaskConstPtr> find_and_run_task(const TaskList& list);
     // for fast init only, not for runtime use
@@ -100,6 +101,8 @@ protected:
     int m_task_delay = TaskDelayUnsetted;
     cv::Mat m_reusable;
     std::shared_ptr<HitDetail> m_last_hit_detail = nullptr;
+    // The actual randomized click point, saved by ClickSelfRecord and reused by ClickRecorded.
+    std::optional<Point> m_recorded_click_point;
     std::unordered_map<std::string, TaskList> m_next_override;
 };
 }
