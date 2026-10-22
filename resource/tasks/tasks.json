@@ -2517,7 +2517,6 @@
         "algorithm": "JustReturn",
         "next": [
             "Infrast",
-            "InfrastNotification",
             "InfrastEnteredFlag",
             "InfrastBegin@InfrastLoading",
             "(Infrast@MainThemes)@QuickSwitch@ToInfrast#next",
@@ -2921,24 +2920,56 @@
         "template": "InfrastOverview.png",
         "templThreshold": 0.95,
         "roi": [0, 100, 300, 150],
-        "next": ["InfrastNotification", "Stop"],
+        "next": ["Stop"],
         "postDelay": 5000
+    },
+    "InfrastCollect": {
+        "algorithm": "JustReturn",
+        "next": ["InfrastNotification", "Stop"]
     },
     "InfrastNotification": {
         "roi": [1100, 0, 180, 300],
         "action": "ClickSelf",
         "postDelay": 500,
         "postDelay_Doc": "点开通知面板时基建布局有缩放动画，动画期间点击无效，默认的延迟应该已经够了，多加一点保险",
-        "next": ["InfrastReward", "InfrastNotification@LoadingText", "InfrastExitReward"]
+        "next": ["InfrastRecycleReward", "InfrastReward", "InfrastNotification@LoadingText", "InfrastExitReward"]
+    },
+    "InfrastRecycleReward": {
+        "Doc": "回收站材料产出收取会弹出获得物资遮罩，需额外点击一次才能继续普通一键收获。",
+        "algorithm": "OcrDetect",
+        "text": ["材料产出"],
+        "action": "ClickSelfRecord",
+        "roi": [0, 600, 800, 118],
+        "postDelay": 1500,
+        "maxTimes": 3,
+        "exceededNext": ["InfrastReward", "InfrastExitReward"],
+        "next": ["InfrastRecycleRewardPopup", "InfrastRecycleRewardFallback"]
+    },
+    "InfrastRecycleRewardPopup": {
+        "Doc": "沿用签到奖励弹窗的获得物资文本识别、信用商店奖励弹窗的屏幕下方关闭坐标。",
+        "algorithm": "OcrDetect",
+        "text": ["获得物资"],
+        "roi": [440, 90, 400, 140],
+        "action": "ClickRect",
+        "specificRect": [645, 665, 1, 1],
+        "postDelay": 1000,
+        "next": ["InfrastRecycleReward", "InfrastReward", "InfrastReward@LoadingText", "InfrastExitReward"]
+    },
+    "InfrastRecycleRewardFallback": {
+        "Doc": "回收站产物弹窗尚无实测截图：找不到｢获得物资｣时，在刚刚 OCR 识别到的｢材料产出｣实际点击坐标复点一次，不使用固定坐标、避免误入设置。",
+        "algorithm": "JustReturn",
+        "action": "ClickRecorded",
+        "postDelay": 1000,
+        "next": ["InfrastRecycleReward", "InfrastReward", "InfrastReward@LoadingText", "InfrastExitReward"]
     },
     "InfrastReward": {
         "algorithm": "OcrDetect",
-        "text": ["可收获", "订单交付", "员信赖", "材料产出"],
+        "text": ["可收获", "订单交付", "员信赖"],
         "action": "ClickSelf",
         "roi": [0, 600, 800, 118],
         "postDelay": 1000,
         "postDelay_Doc": "UI 更新之后给这 b 玩意也加了动画，会点到一键换班",
-        "next": ["InfrastReward", "InfrastReward@LoadingText", "InfrastExitReward"]
+        "next": ["InfrastRecycleReward", "InfrastReward", "InfrastReward@LoadingText", "InfrastExitReward"]
     },
     "InfrastExitReward": {
         "Doc": "干员疲劳、线索收集 是不能一键收获的，所以要先退出一键收获的界面，这里点击的是控制中枢左侧那一片空白的区域",

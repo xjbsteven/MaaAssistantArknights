@@ -49,8 +49,10 @@ private:
     bool parse_station_preset_config(const std::filesystem::path& path, int index);
     bool apply_station_preset_plan(const json::object& plan);
     void append_station_preset_auxiliary_subtasks();
+    void insert_collect_after_first_entry();
 
     std::shared_ptr<ProcessTask> m_infrast_begin_task_ptr = nullptr;
+    std::shared_ptr<ProcessTask> m_collect_task_ptr = nullptr;
     std::shared_ptr<ProcessTask> m_queue_rotation_task = nullptr;
     std::shared_ptr<InfrastInfoTask> m_info_task_ptr = nullptr;
     std::shared_ptr<InfrastMfgTask> m_mfg_task_ptr = nullptr;
@@ -71,6 +73,7 @@ private:
     std::shared_ptr<ReplenishOriginiumShardTaskPlugin> m_replenish_task_ptr = nullptr;
     std::shared_ptr<infrast::TaskData> m_task_data;
 
+    bool m_collect_enabled = true;
     bool m_facility_preset_dorm_enabled = false;
     bool m_facility_preset_replenish_enabled = false;
     bool m_facility_preset_training_enabled = false;

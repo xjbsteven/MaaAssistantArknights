@@ -1,5 +1,8 @@
 #include "InfrastTask.h"
 
+#include <algorithm>
+#include <iterator>
+
 #include "Utils/Logger.hpp"
 
 #include "Task/Infrast/DormScanLogic.h"
@@ -81,6 +84,7 @@ static std::shared_ptr<InfrastMfgTask>
 asst::InfrastTask::InfrastTask(const AsstCallback& callback, Assistant* inst) :
     InterfaceTask(callback, inst, TaskType),
     m_infrast_begin_task_ptr(std::make_shared<ProcessTask>(callback, inst, TaskType)),
+    m_collect_task_ptr(std::make_shared<ProcessTask>(callback, inst, TaskType)),
     m_queue_rotation_task(std::make_shared<ProcessTask>(callback, inst, TaskType)),
     m_info_task_ptr(std::make_shared<InfrastInfoTask>(callback, inst, TaskType)),
     m_mfg_task_ptr(std::make_shared<InfrastMfgTask>(callback, inst, TaskType)),
@@ -103,6 +107,7 @@ asst::InfrastTask::InfrastTask(const AsstCallback& callback, Assistant* inst) :
 
     m_infrast_begin_task_ptr->set_tasks({ "InfrastBegin" }).set_ignore_error(false);
     m_infrast_begin_task_ptr->register_plugin<ScreenshotTaskPlugin>();
+    m_collect_task_ptr->set_tasks({ "InfrastCollect" }).set_ignore_error(true);
     m_queue_rotation_task->set_tasks({ "InfrastEnterRotation" }).set_ignore_error(true);
     m_replenish_task_ptr = m_mfg_task_ptr->register_plugin<ReplenishOriginiumShardTaskPlugin>();
     m_reception_preset_task_ptr->set_ignore_error(true);
@@ -144,6 +149,7 @@ bool asst::InfrastTask::set_params(const json::value& params)
     LogTraceFunction;
 
     auto mode = static_cast<Mode>(params.get("mode", 0));
+    m_collect_enabled = params.get("collect", true);
     const std::string rotation_style = params.get("rotation_style", std::string("game"));
     m_rotation_station_preset = mode == Mode::Rotation && rotation_style == "station_preset";
     m_station_preset_fiammetta_enabled = m_rotation_station_preset && params.get("fiammetta_recovery_enabled", false);
@@ -382,6 +388,9 @@ bool asst::InfrastTask::set_params(const json::value& params)
         }
     }
 
+    if (!m_running) {
+        insert_collect_after_first_entry();
+    }
     return true;
 }
 
@@ -457,7 +466,20 @@ bool asst::InfrastTask::apply_station_preset_plan(const json::object& plan)
         m_subtasks.emplace_back(drones_task);
     }
     append_station_preset_auxiliary_subtasks();
+    insert_collect_after_first_entry();
     return true;
+}
+
+void asst::InfrastTask::insert_collect_after_first_entry()
+{
+    if (!m_collect_enabled) {
+        return;
+    }
+    const auto first_entry = std::ranges::find(m_subtasks, m_infrast_begin_task_ptr);
+    if (first_entry != m_subtasks.end()) {
+        // Single explicit collection right after navigation, unaffected by later drone or replenish steps.
+        m_subtasks.insert(std::next(first_entry), m_collect_task_ptr);
+    }
 }
 
 void asst::InfrastTask::append_station_preset_auxiliary_subtasks()
@@ -768,5 +790,6 @@ bool asst::InfrastTask::parse_and_set_custom_config(const std::filesystem::path&
         }
     } while (false);
 
+    insert_collect_after_first_entry();
     return true;
 }
