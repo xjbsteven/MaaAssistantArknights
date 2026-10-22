@@ -2941,6 +2941,8 @@
         "action": "ClickSelf",
         "roi": [0, 600, 800, 118],
         "postDelay": 1500,
+        "maxTimes": 3,
+        "exceededNext": ["InfrastReward", "InfrastExitReward"],
         "next": ["InfrastRecycleRewardPopup", "InfrastRecycleRewardFallback"]
     },
     "InfrastRecycleRewardPopup": {
