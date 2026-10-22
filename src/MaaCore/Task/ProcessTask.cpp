@@ -315,9 +315,9 @@ ProcessTask::NodeStatus ProcessTask::run_action(const HitDetail& hits)
         if (const auto& res_move = task->rect_move; !res_move.empty()) {
             rect = rect.move(res_move);
         }
-        // ControlScaleProxy::click(Rect) randomizes the click point on every call.
-        // Generate the point just once so ClickRecorded can tap that exact point.
-        const Point point = rand_point_in_rect(rect);
+        // ControlScaleProxy::click(Rect) randomizes the point internally without exposing it.
+        // Click the OCR result center explicitly, and replay that exact point if needed.
+        const Point point(rect.x + rect.width / 2, rect.y + rect.height / 2);
         m_recorded_click_point = point;
         ctrler()->click(point);
         return NodeStatus::Success;
