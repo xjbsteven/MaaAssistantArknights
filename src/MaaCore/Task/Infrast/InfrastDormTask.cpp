@@ -104,7 +104,7 @@ std::optional<size_t> asst::infrast::find_full_mood_fiammetta(const std::vector<
     }
     const auto iter = std::ranges::find_if(first_page, [&](const DormSelectionCandidate& candidate) {
         return !candidate.selected && candidate.available && candidate.operator_id == *fiammetta_id_opt &&
-               candidate.mood_ratio >= FullMoodThreshold;
+               candidate.mood_ratio >= 0.99;
     });
     return iter == first_page.end()
                ? std::nullopt
