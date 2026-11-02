@@ -145,6 +145,19 @@ bool asst::InfrastTask::set_params(const json::value& params)
 {
     LogTraceFunction;
 
+    // Standalone reward collection reuses the official InfrastBegin notification chain.
+    // Never enqueue any facility shift, drones, originium shards, or dorm tasks.
+    // This is independent of the user's normal facility and resource settings.
+    if (params.get("collect_only", false)) {
+        if (m_running) {
+            LogWarn << "Cannot replace running infrastructure task with collect_only";
+            return false;
+        }
+        m_subtasks.clear();
+        m_subtasks.emplace_back(m_infrast_begin_task_ptr);
+        return true;
+    }
+
     auto mode = static_cast<Mode>(params.get("mode", 0));
     const std::string rotation_style = params.get("rotation_style", std::string("game"));
     m_rotation_station_preset = mode == Mode::Rotation && rotation_style == "station_preset";
