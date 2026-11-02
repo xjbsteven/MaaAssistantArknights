@@ -17,5 +17,6 @@ private:
     virtual bool run() override;
 
     std::vector<std::string> m_candidates; // 候选主题名，多个时随机抽取
+    bool m_only_if_fallback = false;          // 仅本轮发生过自动主题兜底时执行
 };
 }

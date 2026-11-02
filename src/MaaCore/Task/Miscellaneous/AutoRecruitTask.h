@@ -7,6 +7,7 @@
 
 #include "Common/AsstTypes.h"
 #include "Config/Miscellaneous/RecruitConfig.h"
+#include "Task/Miscellaneous/RecruitMinimumGuarantee.h"
 
 #include <ranges>
 
@@ -31,6 +32,7 @@ public:
     AutoRecruitTask& set_preserve_tags(std::vector<RecruitConfig::TagId> skip_tags) noexcept;
     AutoRecruitTask& set_set_time(bool set_time) noexcept;
     AutoRecruitTask& set_force_refresh(bool force_refrest) noexcept;
+    AutoRecruitTask& set_minimum_recruit_times(int minimum_recruit_times) noexcept;
     AutoRecruitTask& set_recruitment_time(std::unordered_map<int, int>) noexcept;
 
     AutoRecruitTask& set_penguin_enabled(bool enable, std::string penguin_id = std::string()) noexcept;
@@ -54,7 +56,7 @@ protected:
     };
 
     std::optional<Rect> try_get_start_button(const cv::Mat&);
-    recruit_result recruit_one(const Rect&);
+    recruit_result recruit_one(const Rect&, int remaining_available_slots);
     bool check_recruit_home_page();
     bool recruit_begin();
     bool check_timer(int);
@@ -164,7 +166,9 @@ protected:
                this->m_select_level.end();
     }
 
-    calc_task_result_type recruit_calc_task(slot_index = 0);
+    bool should_force_confirm_low_level(int level, int remaining_available_slots) const noexcept;
+
+    calc_task_result_type recruit_calc_task(slot_index = 0, int remaining_available_slots = 0);
 
     std::vector<int> m_select_level;
     std::vector<int> m_confirm_level;
@@ -179,6 +183,7 @@ protected:
     bool m_has_refresh = true;
     bool m_set_time = true;
     bool m_force_refresh = true;
+    int m_minimum_recruit_times = 0;
     std::unordered_map<int /*level*/, int /*minutes*/> m_desired_time_map;
 
     int m_slot_fail = 0;
