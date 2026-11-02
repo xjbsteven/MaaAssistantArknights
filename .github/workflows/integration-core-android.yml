@@ -1,0 +1,61 @@
+name: Custom Core Android Integration CI
+
+on:
+  push:
+    branches:
+      - integration/official-20261102
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-arm64:
+    name: Build custom Android arm64 Core
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Fetch MaaUtils
+        run: git submodule update --init --depth 1 src/MaaUtils
+      - name: Validate resource and migrated tasks
+        run: |
+          python3 -m json.tool resource/tasks/tasks.json >/dev/null
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          tasks = json.loads(Path('resource/tasks/tasks.json').read_text())
+          for key in ('InfrastEnterPresetPage', 'InfrastPresetSwitchButton', 'InfrastRewardRecycleProduct'):
+              assert key in tasks, key
+          for filename in ('InfrastPresetSwitchButton.png', 'InfrastPresetSwitchButtonBlue.png'):
+              assert (Path('resource/template/InfrastPic/Notification') / filename).is_file(), filename
+          print('Task resource and custom templates: OK')
+          PY
+      - name: Bootstrap MaaDeps
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/maadeps-download.py arm64-android
+      - name: Setup Android NDK r29
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r29
+      - name: Configure Android build
+        run: |
+          cmake -B build --preset android-publish-arm64 \
+            -DCMAKE_TOOLCHAIN_FILE=${{ steps.setup-ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake \
+            -DMAA_HASH_VERSION=v6.21.1-custom.${{ github.sha }}
+      - name: Compile and install custom Core
+        run: |
+          cmake --build build --parallel 4
+          cmake --install build --prefix install
+          test -s install/libMaaCore.so
+          test -s install/libMaaUtils.so
+          test -s install/resource/tasks/tasks.json
+      - name: Upload matching custom Core and resources
+        uses: actions/upload-artifact@v7
+        with:
+          name: custom-core-android-arm64
+          path: install/
+          retention-days: 14
