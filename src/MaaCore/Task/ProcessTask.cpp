@@ -399,6 +399,12 @@ ProcessTask::NodeStatus ProcessTask::run_task(const HitDetail& hits)
         return result;
     }
 
+    // Mark only the automatic unsupported-theme recovery, not user-requested theme changes.
+    if (task_name.ends_with("SwitchTheme@ConfirmThemeChange")) {
+        Log.info("automatic UI theme fallback confirmed");
+        status()->set_number(Status::UiThemeFallbackTriggered, 1);
+    }
+
     status()->set_number(Status::ProcessTaskLastTimePrefix + task_name, time(nullptr));
 
     // 减少其他任务的执行次数
