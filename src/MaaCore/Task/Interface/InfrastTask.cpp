@@ -153,10 +153,15 @@ bool asst::InfrastTask::set_params(const json::value& params)
             LogWarn << "Cannot replace running infrastructure task with collect_only";
             return false;
         }
+        m_infrast_begin_task_ptr->set_tasks({ "InfrastBegin" });
         m_subtasks.clear();
         m_subtasks.emplace_back(m_infrast_begin_task_ptr);
         return true;
     }
+
+    // v909 lets users disable automatic collection independently of shifts.
+    // Official InfrastBegin contains collection; use a navigation-only variant.
+    m_infrast_begin_task_ptr->set_tasks({ params.get("collect", true) ? "InfrastBegin" : "InfrastBeginNoCollect" });
 
     auto mode = static_cast<Mode>(params.get("mode", 0));
     const std::string rotation_style = params.get("rotation_style", std::string("game"));

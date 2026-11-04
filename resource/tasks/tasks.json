@@ -2522,6 +2522,18 @@
             "Infrast@OfflineConfirm"
         ]
     },
+    "InfrastBeginNoCollect": {
+        "baseTask": "InfrastBegin",
+        "next": [
+            "Infrast",
+            "InfrastEnteredFlag",
+            "InfrastBegin@InfrastLoading",
+            "(Infrast@MainThemes)@QuickSwitch@ToInfrast#next",
+            "Infrast@ReturnButtons#next",
+            "Infrast@CloseAnnos#next",
+            "Infrast@OfflineConfirm"
+        ]
+    },
     "InfrastInfoMfgLevelMini": {
         "template": "ManufacturingLevelMini.png",
         "method": "HSVCount",
